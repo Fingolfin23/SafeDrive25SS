@@ -3,7 +3,7 @@
 **High‑Speed Driving with a Predefined Level of Safety**  
 *TUM Case Study – Summer Semester 2025 (SS25)*
 
-## Team members
+## Team members <sup>(alphabetical by last name)</sup>
 
 - **Yanxing Chen**  <a href="mailto:yanxing.chen@tum.de">yanxing.chen@tum.de</a>  
 - **Yan Qiu**  <a href="mailto:yan.qiu@tum.de">yan.qiu@tum.de</a>  
