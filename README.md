@@ -6,7 +6,7 @@
 ## Team members <sup>(alphabetical by last name)</sup>
 
 - **Yanxing Chen**  <a href="mailto:yanxing.chen@tum.de">yanxing.chen@tum.de</a>  
-- **Yan Qiu**  <a href="mailto:go56xol@mytum.de">yan.qiu@tum.de</a>  
+- **Yan Qiu**  <a href="mailto:go56xol@mytum.de">go56xol@@mytum.de</a>  
 - **Ilia Vasenkov**  <a href="mailto:vid1525@yandex.ru">vid1525@yandex.ru</a>  
 - **Ke Xin**  <a href="mailto:ke.xin@tum.de">ke.xin@tum.de</a>  
 - **Wuzhe Zhu**  <a href="mailto:wuzhe.zhu@tum.de">wuzhe.zhu@tum.de</a>
