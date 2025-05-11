@@ -1,13 +1,21 @@
-This folder is going to contain the mathematical derivation of the parameterisation of a track, the formulation of the reference path finding problem, the solution, together with the python implementation
+This repository contains the **mathematical derivation**, **problem formulation**, and **Python implementation** related to the parameterisation of a race track and the optimization of a reference path using optimal control techniques.
 
-Things have been down:
-~method for parameterisation a track
-~problem formulation and discretization for reference path optimization
-~python implementation for solve the opt problem
+## 📌 Contents
 
-Things to do:
-~annotate the .py files
-~align the python output to the desired output format
-~read and add the casadi solver's mathematical background
+- Mathematical derivation of the track parameterisation
+- Problem formulation and discretization of the reference path optimization task
+- Python implementation using CasADi to solve the optimal control problem
 
-!!!Some documents still need enormous annotation !!!
+## ✅ Completed
+
+- [x] Implemented a method for track parameterisation
+- [x] Formulated and discretized the reference path optimization problem
+- [x] Developed Python code to solve the optimal control problem
+
+## 🔧 To Do
+
+- [ ] Add detailed annotations to the `.py` files
+- [ ] Align the Python output format with the desired specification
+- [ ] Summarize and integrate the mathematical background of the CasADi solver
+
+> ⚠️ Some documents still require **extensive annotation**.
