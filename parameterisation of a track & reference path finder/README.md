@@ -1,4 +1,4 @@
-This repository contains the **mathematical derivation**, **problem formulation**, and **Python implementation** related to the parameterisation of a race track and the optimization of a reference path using optimal control techniques.
+This folder contains the work related to the parameterisation of a race track and the optimization of a reference path using optimal control techniques.
 
 ## 📌 Contents
 
