@@ -5,6 +5,7 @@ from matplotlib import animation
 from scipy.interpolate import CubicSpline
 from vehiclemodel.kinematic_model import KinematicModel
 from vehiclemodel.dynamic_LinearTire_model import DynamicModel_LinearTire
+from vehiclemodel.doubletrack import DynamicModel_DoubleTrack
 
 
 class PID:
@@ -163,7 +164,7 @@ def main():
     x0, y0, yaw0 = path_xy[0, 0], path_xy[0, 1], ref_path.ref_path[0, 2]
 
     # ============ Select Model ============ #
-    model_type = "dynamic"  # Options: "kinematic", "dynamic"
+    model_type = "double"  # Options: "kinematic", "dynamic","double"
 
     if model_type == "kinematic":
         model = KinematicModel(x=x0, y=y0, psi=yaw0)
@@ -173,11 +174,15 @@ def main():
         model = DynamicModel_LinearTire(X=x0, Y=y0, phi=yaw0)
         def update_model(m, a, delta): m.update(delta, Fx=m.m * a)
         def get_v(state): return state[3]
+    elif model_type == "double":
+        model = DynamicModel_DoubleTrack(X=x0, Y=y0, Psi=yaw0)
+        def update_model(m, a, delta): m.update(delta_f=delta, F_dr=m.m * a)
+        def get_v(state): return state[3]  # v is the 4th element in get_state()
     else:
         raise ValueError("Invalid model_type.")
 
     # PID controller for longitudinal control
-    speed_pid = PID(Kp=200.0, Ki=1.0, Kd=500.0, target=1.0,
+    speed_pid = PID(Kp=100.0, Ki=1.0, Kd=500.0, target=7.0,
                     upper_force=1000.0, lower_force=-500.0)
 
     fig, ax = plt.subplots()
@@ -185,7 +190,7 @@ def main():
     car_patch, tires = create_vehicle_patches(ax)
 
     states = []
-    for _ in range(200):
+    for _ in range(400):
         state = model.get_state()
         x, y, psi = state[0], state[1], state[2]
         v = get_v(state)
