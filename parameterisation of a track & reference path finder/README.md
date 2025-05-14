@@ -14,8 +14,6 @@ This folder contains the work related to the parameterisation of a race track an
 
 ## 🔧 To Do
 
-- [ ] Add detailed annotations to the `.py` files
 - [ ] Align the Python output format with the desired specification
-- [ ] Summarize and integrate the mathematical background of the CasADi solver
 
 > ⚠️ Some documents still require **extensive annotation**.
