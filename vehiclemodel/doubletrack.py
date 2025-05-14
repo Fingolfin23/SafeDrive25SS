@@ -63,14 +63,32 @@ def get_tire_corners_base(x, y, yaw, delta, l_f, l_r,
 # ========================================
 # Dynamic Vehicle Model (Double Track)
 # ========================================
-# Author: Ke Xin
-# Date: 2025-05-12
+# Author: Ke Xin, Yanxing Chen
+# Date: 2025-05-14
 
 # ========================================
 
+LINEAR_STIFFNESS_PARAMS = {
+    "compact_car":   (7.0e4, 9.5e4),
+    "passenger_car": (8.0e4, 1.0e5),
+    "suv":           (9.0e4, 1.1e5),
+    "van":           (1.0e5, 1.388e5),
+    "fsae":          (2.8e4, 3.0e4),
+}
 
-def calc_tire_force(alpha, model="nonlinear", c_alpha=3200.0, F_z=3750.0,
-                    C1=1.3, C2=15.0, C3=0.5):
+
+BURCKHARDT_PARAMS = {
+    "dry_asphalt":  (1.029,  17.16,   0.523, 0.03),
+    "dry_concrete": (1.197,  25.168,  0.5373,0.03),
+    "snow":         (0.1946, 94.129,  0.0646,0.03),
+    "ice":          (0.05,   306.39,  0.0,   0.03),
+    } #from "M. Burckhardt, Fahrwerktechnik: Radschlupf-Regelsysteme, Würzburg: Vogel Verlag. 1993."
+
+
+
+
+def calc_tire_force(alpha, model="linear", c_alpha=3200.0, F_z=3750.0,
+                    C1=None, C2=None, C3=None , C4=None, road_cond=None):
     """
     Calculate lateral tire force based on the selected tire model.
 
@@ -79,19 +97,95 @@ def calc_tire_force(alpha, model="nonlinear", c_alpha=3200.0, F_z=3750.0,
         model (str): 'linear' or 'nonlinear'
         c_alpha (float): Cornering stiffness [N/rad] for linear model
         F_z (float): Vertical load [N] for nonlinear model
-        C1, C2, C3 (float): Nonlinear tire model parameters
-
+        C1 (float): maximum value of friction curve
+        C2 (float): friction curve shape
+        C3 (float): friction curve difference between the maximum value and the value at S_res = 1
+        C4 (float): wetness characteristic value
+        road_cond (str or None): Road condition for Burckhardt model ('dry_asphalt', 'dry_concrete', 'snow', 'ice')
     Returns:
         float: Lateral force [N]
     """
+
+    
+        # Resolve Burckhardt parameters if needed
+    if model in ("nonlinear", "nonlinear Burckhardt"):
+        if None in (C1, C2, C3, C4):
+            try:
+                C1, C2, C3, C4 = BURCKHARDT_PARAMS[road_cond]
+            except Exception:
+                raise ValueError("Unknown or missing road condition for Burckhardt parameters.")
+
+
     if model == "linear":
         return c_alpha * alpha
+    
     elif model == "nonlinear":
         S_res = np.sqrt(2 - 2 * np.cos(alpha))
         if S_res < 1e-6:
             return 0.0
         mu_res = C1 * (1 - np.exp(-C2 * S_res)) - C3 * S_res
         return mu_res * F_z  # S_Y/S_res ≈ 1 assumption
+    
+    elif model == "nonlinear Burckhardt":
+        S_res = np.sqrt(2 - 2 * np.cos(alpha))
+        if S_res < 1e-6:
+            return 0.0
+        mu_res = [C1 * (1 - np.exp(-C2 * S_res)) - C3 * S_res] * np.exp(-C4 * S_res)
+        return mu_res * F_z  # S_Y/S_res ≈ 1 assumption
+    
+    elif model == "nonlinear Pacejka":
+        # Pacejka tire model parameters
+        B = 10.0
+        C = 1.9
+        D = 1.0
+        E = 0.97
+        S = np.sin(alpha)
+        K = np.cos(B * np.arctan(C * S))
+        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
+        return F * F_z
+    
+    elif model == "nonlinear Dugoff":
+        # Dugoff tire model parameters
+        B = 10.0
+        C = 1.9
+        D = 1.0
+        E = 0.97
+        S = np.sin(alpha)
+        K = np.cos(B * np.arctan(C * S))
+        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
+        return F * F_z
+    elif model == "nonlinear Fiala":
+        # Fiala tire model parameters
+        B = 10.0
+        C = 1.9
+        D = 1.0
+        E = 0.97
+        S = np.sin(alpha)
+        K = np.cos(B * np.arctan(C * S))
+        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
+        return F * F_z
+    
+    elif model == "nonlinear Magic Formula":
+        # Magic Formula tire model parameters
+        B = 10.0
+        C = 1.9
+        D = 1.0
+        E = 0.97
+        S = np.sin(alpha)
+        K = np.cos(B * np.arctan(C * S))
+        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
+        return F * F_z
+    
+    elif model == "nonlinear Van Zanten":
+        # Van Zanten tire model parameters
+        B = 10.0
+        C = 1.9
+        D = 1.0
+        E = 0.97
+        S = np.sin(alpha)
+        K = np.cos(B * np.arctan(C * S))
+        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
+        return F * F_z
     else:
         raise ValueError("Unknown tire model type: choose 'linear' or 'nonlinear'.")
 
@@ -101,7 +195,7 @@ class DynamicModel_DoubleTrack:
                  l_f=1.2, l_r=1.6, w_f=1.5, w_r=1.5,
                  m=1500.0, Jzz=2250.0,
                  c_alpha_f=3200.0, c_alpha_r=3400.0,
-                 dt=0.01, tire_model="linear"):
+                 dt=0.01, tire_model="linear", integrator="euler"):
         """
         Double-Track Vehicle Model (DTM) with flexible tire model (linear or nonlinear).
         State: [X, Y, Ψ, v, β, Ψ̇]
@@ -128,6 +222,10 @@ class DynamicModel_DoubleTrack:
         self.dt = dt
         self.g = 9.81
         self.tire_model = tire_model
+        self.integrator = integrator.lower()
+        if self.integrator not in ["euler", "rk4"]:
+            raise ValueError("Integrator must be 'euler' or 'rk4'.")
+        self.integrator = "euler"  # Default to Euler method
 
     def update(self, delta_f, F_dr):
         """
@@ -191,7 +289,9 @@ class DynamicModel_DoubleTrack:
                 Fy_rear * np.sin(beta - delta_r) +
                 F_dr * np.cos(beta)
         )
-
+        
+       
+        """ 
         # Euler integration
         self.X += dot_X * self.dt
         self.Y += dot_Y * self.dt
@@ -199,6 +299,75 @@ class DynamicModel_DoubleTrack:
         self.beta += dot_beta * self.dt
         self.Psi_dot += dot_Psi_dot * self.dt
         self.v += dot_v * self.dt
+        """
+
+        # ------------------------------------------------------------------
+        # Time integration
+        # ------------------------------------------------------------------
+        if self.integrator == "euler":
+            # Forward‑Euler (original behaviour)
+            self.X       += dot_X       * self.dt
+            self.Y       += dot_Y       * self.dt
+            self.Psi     += dot_Psi     * self.dt
+            self.beta    += dot_beta    * self.dt
+            self.Psi_dot += dot_Psi_dot * self.dt
+            self.v       += dot_v       * self.dt
+
+        elif self.integrator == "rk4":
+            # 4th‑order Runge–Kutta
+            # Pack state & derivative helpers
+            def _deriv(state):
+                X, Y, Psi, v, beta, Psi_dot = state
+                vx = v * np.cos(beta)
+                vy = v * np.sin(beta)
+                # recompute slip angles and forces (duplicated from above)
+                alpha_fl = delta_f - np.arctan2(vy + l_f * Psi_dot, vx - 0.5 * w_f * Psi_dot)
+                alpha_fr = delta_f - np.arctan2(vy + l_f * Psi_dot, vx + 0.5 * w_f * Psi_dot)
+                alpha_rl = 0.0 - np.arctan2(vy - l_r * Psi_dot, vx - 0.5 * w_r * Psi_dot)
+                alpha_rr = 0.0 - np.arctan2(vy - l_r * Psi_dot, vx + 0.5 * w_r * Psi_dot)
+                Fyf_fl = calc_tire_force(alpha_fl, model=self.tire_model, c_alpha=c_alpha_f, F_z=F_z)
+                Fyf_fr = calc_tire_force(alpha_fr, model=self.tire_model, c_alpha=c_alpha_f, F_z=F_z)
+                Fyr_rl = calc_tire_force(alpha_rl, model=self.tire_model, c_alpha=c_alpha_r, F_z=F_z)
+                Fyr_rr = calc_tire_force(alpha_rr, model=self.tire_model, c_alpha=c_alpha_r, F_z=F_z)
+                Fy_front = Fyf_fl + Fyf_fr
+                Fy_rear  = Fyr_rl + Fyr_rr
+                dot_X   = v * np.cos(Psi + beta)
+                dot_Y   = v * np.sin(Psi + beta)
+                dot_Psi = Psi_dot
+                dot_beta = (-Psi_dot +
+                             (1 / (m * v)) * (Fy_front * np.cos(delta_f - beta) +
+                                              Fy_rear * np.cos(0.0 - beta) -
+                                              F_dr * np.sin(beta)))
+                dot_Psi_dot = (1 / Jzz) * (
+                        Fyf_fl * (l_f * np.cos(delta_f) - 0.5 * w_f * np.sin(delta_f)) +
+                        Fyf_fr * (l_f * np.cos(delta_f) + 0.5 * w_f * np.sin(delta_f)) +
+                        Fyr_rl * (-l_r * np.cos(0.0) - 0.5 * w_r * np.sin(0.0)) +
+                        Fyr_rr * (-l_r * np.cos(0.0) + 0.5 * w_r * np.sin(0.0))
+                )
+                dot_v = (1 / m) * (
+                        Fy_front * np.sin(beta - delta_f) +
+                        Fy_rear  * np.sin(beta - 0.0) +
+                        F_dr * np.cos(beta)
+                )
+                return np.array([dot_X, dot_Y, dot_Psi, v, dot_beta, dot_Psi_dot, dot_v])
+
+            state = np.array([self.X, self.Y, self.Psi, self.v, self.beta, self.Psi_dot])
+            k1 = np.array([dot_X, dot_Y, dot_Psi, dot_v, dot_beta, dot_Psi_dot])
+            k2 = _deriv(state + 0.5 * self.dt * k1)
+            k3 = _deriv(state + 0.5 * self.dt * k2)
+            k4 = _deriv(state +       self.dt * k3)
+            delta_state = (k1 + 2*k2 + 2*k3 + k4) / 6.0 * self.dt
+            self.X       += delta_state[0]
+            self.Y       += delta_state[1]
+            self.Psi     += delta_state[2]
+            self.v       += delta_state[3]
+            self.beta    += delta_state[4]
+            self.Psi_dot += delta_state[5]
+
+        else:
+            raise ValueError(f"Unknown integrator '{self.integrator}'. Choose 'euler' or 'rk4'.")
+
+
 
         # Clip for numerical stability
         self.v = np.clip(self.v, 1e-3, 50.0)
