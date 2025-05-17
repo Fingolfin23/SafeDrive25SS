@@ -15,5 +15,3 @@ This folder contains the work related to the parameterisation of a race track an
 ## 🔧 To Do
 
 - [ ] Align the Python output format with the desired specification
-
-> ⚠️ Some documents still require **extensive annotation**.
