@@ -9,3 +9,4 @@ update demo:
 3. trial for basic model with both round traj. and cubic bezier curve
 
 
+19th MAY: now working on opt with double track and nonlinear tire.updated short version but lot to modify
