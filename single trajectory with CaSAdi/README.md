@@ -13,3 +13,5 @@ update demo:
 
 
 205h MAY: uplodae trial.M, successfully finding the opt solution with double track plus nolinear tire while no constraints added now. need to add later
+
+20th MAY: uploaded approch1.py. A path planner with obstavle avoidance.
