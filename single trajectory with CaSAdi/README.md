@@ -10,3 +10,6 @@ update demo:
 
 
 19th MAY: now working on opt with double track and nonlinear tire.updated short version but lot to modify
+
+
+205h MAY: uplodae trial.M, successfully finding the opt solution with double track plus nolinear tire while no constraints added now. need to add later
