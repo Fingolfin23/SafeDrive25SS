@@ -16,4 +16,4 @@ update demo:
 
 20th MAY: uploaded approch1.py. A path planner with obstavle avoidance.
 
-21th MAY：Thanks to GOD. with constraints it finally works. Also thanks to the help of Xin Ke.♥ NEXT TO DO: get it work on REAL TRACK as well as handle obstacles.
+21th MAY：Thanks to GOD. with constraints it finally works. NEXT TO DO: get it work on REAL TRACK as well as handle obstacles.
