@@ -4,7 +4,7 @@ from matplotlib.patches import Polygon
 from matplotlib import animation
 from scipy.interpolate import CubicSpline
 from vehiclemodel.kinematic_model import KinematicModel
-from vehiclemodel.dynamic_LinearTire_model import DynamicModel_LinearTire
+from vehiclemodel.dynamic_Tire_model import DynamicModel_LinearTire
 from vehiclemodel.doubletrack import DynamicModel_DoubleTrack
 
 

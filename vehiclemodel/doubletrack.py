@@ -84,11 +84,17 @@ BURCKHARDT_PARAMS = {
     "ice":          (0.05,   306.39,  0.0,   0.03),
     } #from "M. Burckhardt, Fahrwerktechnik: Radschlupf-Regelsysteme, Würzburg: Vogel Verlag. 1993."
 
+MAGIC_PARAMS = {
+    "pc_dry":  dict(B=10.2, C=1.9, D=1.0, E=0.97),
+    "pc_wet":  dict(B=9.5,  C=1.9, D=0.75, E=1.01),
+    "suv_allT":dict(B=11.0, C=1.8, D=0.95, E=0.98),
+    "fsae_slick":dict(B=13.5,C=1.8, D=1.15,E=0.93),
+}
 
 
 
 def calc_tire_force(alpha, model="linear", c_alpha=3200.0, F_z=3750.0,
-                    C1=None, C2=None, C3=None , C4=None, road_cond=None):
+                    C1=None, C2=None, C3=None , C4=None, B=None, C=None, D=None, E=None, road_cond=None, T_tire=None):
     """
     Calculate lateral tire force based on the selected tire model.
 
@@ -101,7 +107,12 @@ def calc_tire_force(alpha, model="linear", c_alpha=3200.0, F_z=3750.0,
         C2 (float): friction curve shape
         C3 (float): friction curve difference between the maximum value and the value at S_res = 1
         C4 (float): wetness characteristic value
+        B (float): stiffness factor: controls initial slope of the force‑angle curve
+        C (float): shape factor: adjusts overall curve “fatness”
+        D (float): peak factor: scales peak height (≈ μ_peak · F_z_ref)
+        E (float): curvature factor: tunes how quickly the force drops after the peak
         road_cond (str or None): Road condition for Burckhardt model ('dry_asphalt', 'dry_concrete', 'snow', 'ice')
+            or keyword to look up B‑C‑D‑E from MAGIC_PARAMS when model is Magic‑Formula type.
     Returns:
         float: Lateral force [N]
     """
@@ -127,65 +138,40 @@ def calc_tire_force(alpha, model="linear", c_alpha=3200.0, F_z=3750.0,
         return mu_res * F_z  # S_Y/S_res ≈ 1 assumption
     
     elif model == "nonlinear Burckhardt":
+        if T_tire is not None:
+            C1 *= (1 + 0.002 * (T_tire - 25))   # 轻微上升
+            C3 *= (1 - 0.004 * (T_tire - 25))
         S_res = np.sqrt(2 - 2 * np.cos(alpha))
         if S_res < 1e-6:
             return 0.0
         mu_res = [C1 * (1 - np.exp(-C2 * S_res)) - C3 * S_res] * np.exp(-C4 * S_res)
         return mu_res * F_z  # S_Y/S_res ≈ 1 assumption
     
-    elif model == "nonlinear Pacejka":
-        # Pacejka tire model parameters
-        B = 10.0
-        C = 1.9
-        D = 1.0
-        E = 0.97
-        S = np.sin(alpha)
-        K = np.cos(B * np.arctan(C * S))
-        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
-        return F * F_z
-    
-    elif model == "nonlinear Dugoff":
-        # Dugoff tire model parameters
-        B = 10.0
-        C = 1.9
-        D = 1.0
-        E = 0.97
-        S = np.sin(alpha)
-        K = np.cos(B * np.arctan(C * S))
-        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
-        return F * F_z
-    elif model == "nonlinear Fiala":
-        # Fiala tire model parameters
-        B = 10.0
-        C = 1.9
-        D = 1.0
-        E = 0.97
-        S = np.sin(alpha)
-        K = np.cos(B * np.arctan(C * S))
-        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
-        return F * F_z
-    
-    elif model == "nonlinear Magic Formula":
-        # Magic Formula tire model parameters
-        B = 10.0
-        C = 1.9
-        D = 1.0
-        E = 0.97
-        S = np.sin(alpha)
-        K = np.cos(B * np.arctan(C * S))
-        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
-        return F * F_z
-    
-    elif model == "nonlinear Van Zanten":
-        # Van Zanten tire model parameters
-        B = 10.0
-        C = 1.9
-        D = 1.0
-        E = 0.97
-        S = np.sin(alpha)
-        K = np.cos(B * np.arctan(C * S))
-        F = D * np.sin(C * np.arctan(B * S)) + E * D * np.sin(np.arctan(B * S))
-        return F * F_z
+    elif model.lower().replace(" ", "") in ("magic", "nonlinearmagicformula",
+                                            "nonlinearpacejka", "pacejka"):
+        # Magic Formula / Pacejka family
+        # Try to fetch B, C, D, E from params if any are None
+        if None in (B, C, D, E):
+            if road_cond is not None and road_cond in MAGIC_PARAMS:
+                params = MAGIC_PARAMS[road_cond]
+                B = params.get('B', B)
+                C = params.get('C', C)
+                D = params.get('D', D)
+                E = params.get('E', E)
+            else:
+                raise ValueError("Missing or unknown road_cond for Magic Formula parameters.")
+        if T_tire is not None:
+            mu_corr = 1 - 0.005 * abs(T_tire - 60)           # 钟形 μ
+            # kB: empirical slope for temperature-dependent stiffness factor B
+            #     Each +1 °C above 25 °C increases B by ≈ 0.3 % (kB ≈ 0.002-0.004 per °C).
+            #     See TU Delft FSAE tyre tests and Pacejka T&VD, Chap. 4.
+            kB = 0.003
+            B  *= (1 + kB * (T_tire - 25))   # temperature-corrected stiffness factor
+            D  *= mu_corr
+        # Classic Magic Formula (Pacejka) for lateral force
+        Fy = D * F_z * np.sin(C * np.arctan(B * alpha - E * (B * alpha - np.arctan(B * alpha))))
+        return Fy
+
     else:
         raise ValueError("Unknown tire model type: choose 'linear' or 'nonlinear'.")
 
