@@ -19,6 +19,7 @@ update demo:
 21th MAY：Thanks to GOD. with constraints it finally works. NEXT TO DO: get it work on REAL TRACK as well as handle obstacles.
 
 
-25th MAY: define simple obstacles and get it involved with whole NLP optimal control problem. 
+25th MAY: define simple obstacles and get it involved with whole NLP optimal control problem. NEXT to do: implement the code in Casadito see how it works and  handle the abortion problem.
 
-ONE thing to mention: if one build a maths model then simulate on ones own. There is NOTHING like "she does everything based on my work" NOR "all your job is to realize what we did". Its cooperation. Everyone has their own job. NEXT to do: implement the code in Casadito see how it works and  handle the abortion problem.
+
+ONE thing to mention: if one build a maths model then simulate on ones own. There is NOTHING like "she does everything based on my work" NOR "all your job is to realize what we did". Its cooperation. Everyone has their own job. I proposed my own idea. 
