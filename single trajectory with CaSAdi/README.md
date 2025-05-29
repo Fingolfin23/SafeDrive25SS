@@ -23,3 +23,7 @@ update demo:
 
 
 ONE thing to mention: if one build a maths model then simulate on ones own. There is NOTHING like "she does everything based on my work" NOR "all your job is to realize what we did". Its cooperation. Everyone has their own job. I proposed my own idea. 
+
+
+
+29th MAY: updated trial.M obstconstraint are inactive seems like some conditions for it cant work. Upadated newwersion.m, obstacle constraints are active as well as hard safety constraints but visualization seems like weird, mb problem with projection. no later than 31st MAY, new maths model will be uploaded and check conditions again.
