@@ -17,3 +17,13 @@ update demo:
 20th MAY: uploaded approch1.py. A path planner with obstavle avoidance.
 
 21th MAY：Thanks to GOD. with constraints it finally works. NEXT TO DO: get it work on REAL TRACK as well as handle obstacles.
+
+
+25th MAY: define simple obstacles and get it involved with whole NLP optimal control problem. Also modify the opt objective function. NEXT to do: implement the code in Casadito see how it works and  handle the abortion problem.
+
+
+ONE thing to mention: if one build a maths model then simulate on ones own. There is NOTHING like "she does everything based on my work" NOR "all your job is to realize what we did". Its cooperation. Everyone has their own job. I proposed my own idea. 
+
+
+
+29th MAY: updated trial.M obstconstraint are inactive seems like some conditions for it cant work. Upadated newwersion.m, obstacle constraints are active as well as hard safety constraints but visualization seems like weird, mb problem with projection. no later than 31st MAY, new maths model will be uploaded and check conditions again.

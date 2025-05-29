@@ -1,0 +1,92 @@
+import obstacle_avoidance.geometric_primitives as gp
+import obstacle_avoidance.obstacles as obstcl
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    'v, obstacle, expected_result',
+    [
+        (
+            gp.Vector(5, 0, gp.Point(0, -5)),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            None,
+        ),  # vector is too far from obstacle
+        (
+            gp.Vector(-2, -2),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            None,
+        ),  # wrong direction
+        (
+            gp.Vector(6, 6, gp.Point(5, 5)),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            None,
+        ),  # wrong direction
+        (
+            gp.Vector(1, 1),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            None,
+        ),  # vector is too short
+        (
+            gp.Vector(3, 4, gp.Point(2, 3)),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            None,
+        ),  # vector is too short
+        (
+            gp.Vector(2, 2),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            gp.Vector(1.17712434447, 1.17712434447),
+        ),  # has intersection
+        (
+            gp.Vector(4, 5, gp.Point(2, 3)),
+            obstcl.CircleObstacle(gp.Point(2, 3), 2),
+            gp.Vector(3.41421356237, 4.41421356237, gp.Point(2, 3)),
+        ),  # has intersection
+    ]
+)
+def test_circle_obstacle_intersection_with_vector(
+    v, obstacle, expected_result
+):
+    assert obstacle.get_intersection_with_vector(v) == expected_result
+
+
+@pytest.mark.parametrize(
+    'obstacle, new_origin, expected_result',
+    [
+        (
+            obstcl.CircleObstacle(gp.Point(1, 1), 3),
+            gp.Point(2, 3),
+            obstcl.CircleObstacle(gp.Point(-1, -2), 3),
+        ),
+        (
+            obstcl.CircleObstacle(gp.Point(3, 4), 5),
+            gp.Point(2, 3),
+            obstcl.CircleObstacle(gp.Point(1, 1), 5),
+        ),
+    ]
+)
+def test_circle_obstacle_shift_to_new_origin(
+    obstacle, new_origin, expected_result
+):
+    assert obstacle.shift_to_new_origin(new_origin) == expected_result
+
+
+@pytest.mark.parametrize(
+    'obstacle, new_radius, expected_result',
+    [
+        (
+            obstcl.CircleObstacle(gp.Point(1, 1), 3),
+            5,
+            obstcl.CircleObstacle(gp.Point(1, 1), 5),
+        ),
+        (
+            obstcl.CircleObstacle(gp.Point(3, 4), 5),
+            1,
+            obstcl.CircleObstacle(gp.Point(3, 4), 1),
+        ),
+    ]
+)
+def test_circle_obstacle_update_radius(
+    obstacle, new_radius, expected_result
+):
+    assert obstacle.update_radius(new_radius) == expected_result
