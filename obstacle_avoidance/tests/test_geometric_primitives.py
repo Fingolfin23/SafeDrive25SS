@@ -79,6 +79,35 @@ def test_shift_to_new_origin(v, new_origin, expected_result):
 
 
 @pytest.mark.parametrize(
+    'v, x, y, expected_result',
+    [
+        (gp.Vector(2, 3, gp.Point(0, 0)), 2, 2, gp.Vector(2, 2, gp.Point(0, -1))),
+        (gp.Vector(2, 3, gp.Point(1, -1)), 0, 0, gp.Vector(0, 0, gp.Point(-1, -4))),
+    ]
+)
+def test_shift_to_new_coordinates(v, x, y, expected_result):
+    assert v.shift_to_new_coordinates(x, y) == expected_result
+
+
+@pytest.mark.parametrize(
+    'v, p, expected_result',
+    [
+        (
+            gp.Vector(3.5, 2, gp.Point(1, -1)),
+            gp.Point(2, 3),
+            gp.Vector(
+                2.1229508196721314,
+                3.1475409836065573,
+                gp.Point(-0.3770491803278688, 0.14754098360655732),
+            )
+        )
+    ]
+)
+def test_shift_parallel(v, p, expected_result):
+    assert v.shift_parallel(p) == expected_result
+
+
+@pytest.mark.parametrize(
     'v, new_length, expected_result',
     [
         (gp.Vector(3, 4, gp.Point(0, 0)), 10, gp.Vector(6, 8)),
@@ -87,3 +116,76 @@ def test_shift_to_new_origin(v, new_origin, expected_result):
 )
 def test_update_length(v, new_length, expected_result):
     assert v.update_length(new_length) == expected_result
+
+
+@pytest.mark.parametrize(
+    'v, coef, expected_result',
+    [
+        (gp.Vector(3, 4), 10, gp.Vector(30, 40)),
+        (gp.Vector(3, 4, gp.Point(1, -1)), -5, gp.Vector(-9, -26, gp.Point(1, -1))),
+        (gp.Vector(3, 4, gp.Point(1, -1)), 0, gp.Vector(1, -1, gp.Point(1, -1))),
+    ]
+)
+def test_vector_mul_by_coef(v, coef, expected_result):
+    assert v * coef == expected_result
+
+
+@pytest.mark.parametrize(
+    'v, expected_result',
+    [
+        (gp.Vector(3, 4), gp.Vector(-3, -4)),
+        (gp.Vector(3, 4, gp.Point(1, -1)), gp.Vector(-1, -6, gp.Point(1, -1))),
+    ]
+)
+def test_vector_neg(v, expected_result):
+    assert -v == expected_result
+
+
+@pytest.mark.parametrize(
+    'v1, v2, expected_result',
+    [
+        (gp.Vector(3, 4), gp.Vector(-5, 3), gp.Vector(-2, 7)),
+        (
+            gp.Vector(3, 4, gp.Point(1, -1)),
+            gp.Vector(-5, 3),
+            gp.Vector(-2, 7, gp.Point(1, -1)),
+        ),
+        (
+            gp.Vector(3, 4, gp.Point(1, -1)),
+            gp.Vector(-5, 3, gp.Point(8, 9)),
+            gp.Vector(-10, -2, gp.Point(1, -1)),
+        ),
+        (
+            gp.Vector(-5, 3, gp.Point(8, 9)),
+            gp.Vector(3, 4, gp.Point(1, -1)),
+            gp.Vector(-3, 8, gp.Point(8, 9)),
+        ),
+    ]
+)
+def test_vector_add(v1, v2, expected_result):
+    assert v1 + v2 == expected_result
+
+
+@pytest.mark.parametrize(
+    'v1, v2, expected_result',
+    [
+        (gp.Vector(3, 4), gp.Vector(-5, 3), gp.Vector(8, 1)),
+        (
+            gp.Vector(3, 4, gp.Point(1, -1)),
+            gp.Vector(-5, 3),
+            gp.Vector(8, 1, gp.Point(1, -1)),
+        ),
+        (
+            gp.Vector(3, 4, gp.Point(1, -1)),
+            gp.Vector(-5, 3, gp.Point(8, 9)),
+            gp.Vector(16, 10, gp.Point(1, -1)),
+        ),
+        (
+            gp.Vector(-5, 3, gp.Point(8, 9)),
+            gp.Vector(3, 4, gp.Point(1, -1)),
+            gp.Vector(-7, -2, gp.Point(8, 9)),
+        ),
+    ]
+)
+def test_vector_sub(v1, v2, expected_result):
+    assert v1 - v2 == expected_result

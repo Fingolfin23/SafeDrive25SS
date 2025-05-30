@@ -18,18 +18,29 @@ class DistanceDetector:
         check_obstacles(obstacles)
         self.obstacles = obstacles
 
-    def get_min_distance_vector(self, v: gp.Vector):
+    def get_min_distance_vector(
+        self, v: gp.Vector,
+        is_rectagularized: bool = False,
+    ) -> tuple[gp.Vector, int]:
         """
         Returns minimal distance to obstacles from vector v.
         If vector v does not reach any obstacle, vector v is returned.
         """
 
         result = v
-        for obstacle in self.obstacles:
-            cur_v = obstacle.get_intersection_with_vector(result)
+        obstacle_index = None
+        for index, obstacle in enumerate(self.obstacles):
+            if result.norm() < gp.EPS:
+                return result, obstacle_index
+
+            cur_v = obstacle.get_intersection_with_vector(
+                result,
+                is_rectagularized=is_rectagularized,
+            )
             if cur_v is not None:
                 result = cur_v
-        return result
+                obstacle_index = index
+        return result, obstacle_index
 
 
 class FieldOfViewVectorSampler:
