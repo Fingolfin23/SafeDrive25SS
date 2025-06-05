@@ -3,12 +3,13 @@
 """
 Created on Wed Jun  4 13:19:42 2025
 
-@author: zhuwuzhe
+@author: zhuwuzhe, Yanxing Chen
 """
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
+from scipy.optimize import minimize_scalar
 
 
 class Track:
@@ -164,22 +165,76 @@ class Track:
         """
         return self._d2y_ds2(s_query)
     
-    def FOV(self, s_query):
+    # ------------------------------------------------------------------
+    #  Field‑of‑View boundary: perpendicular line at the nearest point
+    #  that lies m metres straight ahead of the vehicle
+    # ------------------------------------------------------------------
+    def _fov_scalar(self, s_curr: float, m_lookahead: float = 5.0) -> float:
         """
-        get the FOV at s_query
-        
-        For now the boundary of FOV is considered to be a straight line perpendicular to the center line
+        Internal helper: compute FOV boundary for a single arclength value.
 
-        Args:
-            s_query (number or 1D array): the values of arclength
-    
-        Returns:
-            number: the arclength position at which the booundary of FOV intersects with the center line
-            
+        Parameters
+        ----------
+        s_curr : float
+            Current arclength position of the vehicle.
+        m_lookahead : float, optional
+            Look‑ahead distance in metres along the *heading* direction to
+            construct the target point.  Default is 5 m.
+
+        Returns
+        -------
+        float
+            Arclength position s_fov where the perpendicular line intersects
+            the centre line.
         """
-        ## TODO ##
-        #return the FOV evaluated at s_query
-        pass
+        # Current position and unit tangent
+        x0, y0 = self._x_spline(s_curr), self._y_spline(s_curr)
+        dx, dy = self._dxds(s_curr),   self._dyds(s_curr)
+        tn = np.hypot(dx, dy)
+        if tn < 1e-8:            # rare numerical corner
+            return s_curr
+        tx, ty = dx / tn, dy / tn
+
+        # Target point m metres straight ahead of vehicle
+        Px, Py = x0 + tx * m_lookahead, y0 + ty * m_lookahead
+
+        # Distance‑squared from centreline point to target
+        def dist2(s):
+            dxp = self._x_spline(s) - Px
+            dyp = self._y_spline(s) - Py
+            return dxp * dxp + dyp * dyp
+
+        # Search only forward along track, up to 2·m_lookahead or track end
+        s_upper = min(self.s_max, s_curr + 2.0 * m_lookahead)
+        res = minimize_scalar(dist2, bounds=(s_curr, s_upper), method="bounded")
+        return float(res.x)
+
+    def FOV(self, s_query, m_lookahead: float = 5.0):
+        """
+        Return the arclength position(s) where the perpendicular FOV boundary
+        intersects the centre line.
+
+        The boundary is defined as the line perpendicular to the centre line
+        at the *nearest* point to a target that is `m_lookahead` metres straight
+        ahead of the vehicle.
+
+        Parameters
+        ----------
+        s_query : float or np.ndarray
+            Current vehicle arclength position(s).
+        m_lookahead : float, optional
+            Look‑ahead distance in metres (default 5 m).
+
+        Returns
+        -------
+        float or np.ndarray
+            Arclength position(s) s_fov.
+        """
+        if np.ndim(s_query) == 0:
+            return self._fov_scalar(float(s_query), m_lookahead)
+        else:
+            s_query = np.asarray(s_query).ravel()
+            return np.array([self._fov_scalar(s, m_lookahead) for s in s_query])
     
     
         
