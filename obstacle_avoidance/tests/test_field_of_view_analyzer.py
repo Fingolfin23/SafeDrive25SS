@@ -1,6 +1,6 @@
-import obstacle_avoidance.geometric_primitives as gp
-import obstacle_avoidance.obstacles as obstcl
-import obstacle_avoidance.field_of_view_analyzer as fva
+from .. import geometric_primitives as gp
+from .. import obstacles as obstcl
+from .. import field_of_view_analyzer as fva
 
 import math
 import pytest

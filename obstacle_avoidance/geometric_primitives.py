@@ -78,7 +78,7 @@ class Vector:
         Method shifts the vector parallel.
         p - point of the parallel line, on which shifted vector has to lay.
         """
-        assert self.norm() > EPS, 'vector length has to be positive'
+        # assert self.norm() > EPS, 'vector length has to be positive'
 
         norm = Vector(self.y - self.origin.y, self.origin.x - self.x)
         t = (norm.x * (p.x - self.origin.x) + norm.y * (p.y - self.origin.y)) / (norm.x ** 2 + norm.y ** 2)

@@ -1,11 +1,11 @@
-import obstacle_avoidance.geometric_primitives as gp
-import obstacle_avoidance.obstacles as obstcl
+from .. import geometric_primitives as gp
+from .. import obstacles as obstcl
 
 import pytest
 
 
 @pytest.mark.parametrize(
-    'v, is_rectagularized, obstacle, expected_result',
+    'v, is_rectangularized, obstacle, expected_result',
     [
         (
             gp.Vector(5, 0, gp.Point(0, -5)),
@@ -70,11 +70,11 @@ import pytest
     ]
 )
 def test_circle_obstacle_intersection_with_vector(
-    v, is_rectagularized, obstacle, expected_result
+    v, is_rectangularized, obstacle, expected_result
 ):
     assert obstacle.get_intersection_with_vector(
         v,
-        is_rectagularized=is_rectagularized,
+        is_rectangularized=is_rectangularized,
     ) == expected_result
 
 

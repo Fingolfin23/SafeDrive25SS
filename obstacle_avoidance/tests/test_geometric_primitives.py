@@ -1,4 +1,4 @@
-import obstacle_avoidance.geometric_primitives as gp
+from .. import geometric_primitives as gp
 
 import math
 import pytest
