@@ -29,3 +29,6 @@ ONE thing to mention: if one build a maths model then simulate on ones own. Ther
 
 
 5th JUNE: do 2 tricks too get solution more smooth:1,segment to get more discrezation points. 2,get a weight of density according to the 2nd derivatives and 1st derivatives of curve. see segment1curvature.m
+
+
+7th JUNE: write one algorithm for the initials. looks good. see segment1curvature1initials.m
