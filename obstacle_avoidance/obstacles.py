@@ -1,19 +1,31 @@
-import obstacle_avoidance.geometric_primitives as gp
+from . import geometric_primitives as gp
 
 import math
 
 
 class ObstacleInterface:
-    def get_intersection_with_vector(self, v: gp.Vector) -> gp.Vector:
+    def get_intersection_with_vector(
+            self,
+            v: gp.Vector,
+            is_rectangularized: bool = False,
+        ) -> gp.Vector:
         """
         Method returns point on vector v, where the vector v intersects with obstacle.
         If vector v does not intersect with the obstacle then None is returned.
+        is_rectangularized if True then is returned not real intersection wtih the obstacle,
+        but intersection with rectangular boundary comprising the obstacle.
         """
         pass
 
     def shift_to_new_origin(self, new_origin: gp.Point):
         """
         Method updates all data to shift obstacle from old origin (0, 0) to new_origin.
+        """
+        pass
+
+    def is_inside(self, p: gp.Point):
+        """
+        Method returns True, if point p is inside the obstacle.
         """
         pass
 
@@ -25,14 +37,7 @@ class CircleObstacle(ObstacleInterface):
         self.center = center
         self.radius = radius
 
-    def get_intersection_with_vector(self, v: gp.Vector) -> gp.Vector:
-        """
-        Method returns point on vector v, where the vector v intersects with obstacle.
-        If vector v does not intersect with the obstacle then None is returned.
-        """
-
-        assert v.norm() > gp.EPS, 'vector has to have positive length'
-
+    def _get_real_intersection(self, v):
         v_pos = v.get_position()
         circle_pos = self.shift_to_new_origin(v.origin)
         center = circle_pos.center
@@ -58,13 +63,48 @@ class CircleObstacle(ObstacleInterface):
         
         t = min(t1, t2)
         if t < -gp.EPS:  # if one of intersection points lays outside of vector direction
-            t = t1 + t2 - t  # change on different t_i value
+            t = t1 + t2 - t  # change to different t_i value
 
         dist_vector = gp.Vector(v_pos.x * t, v_pos.y * t)
         if dist_vector.norm() > v_pos_norm + gp.EPS:  # initial vector is shorter than found vector
             return None
 
         return dist_vector.shift_to_new_origin(v.origin)
+
+    def _get_rectangularized_intersection(self, v, real_intersection):
+        centerized_v = v.shift_parallel(self.center)
+        intersection_vector = self._get_real_intersection(centerized_v)
+
+        if intersection_vector is None:
+            return None
+
+        if real_intersection.norm() < intersection_vector.norm():
+            return real_intersection
+
+        return intersection_vector.shift_parallel(v.origin)
+
+    def get_intersection_with_vector(
+        self,
+        v: gp.Vector,
+        is_rectangularized: bool = False,
+    ) -> gp.Vector:
+        """
+        Method returns point on vector v, where the vector v intersects with obstacle.
+        If vector v does not intersect with the obstacle then None is returned.
+        """
+
+        assert v.norm() > gp.EPS, 'vector has to have positive length'
+
+        intersection = self._get_real_intersection(v)
+        if is_rectangularized and intersection is not None:
+            return self._get_rectangularized_intersection(v, intersection)
+        return intersection
+
+    def is_inside(self, p: gp.Point):
+        """
+        Method returns True, if point p is inside the obstacle.
+        """
+        return (p.x - self.center.x) ** 2 + (p.y - self.center.y) ** 2 < self.radius ** 2
 
     def shift_to_new_origin(self, new_origin: gp.Point):
         """

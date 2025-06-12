@@ -1,5 +1,7 @@
-import obstacle_avoidance.geometric_primitives as gp
-import obstacle_avoidance.obstacles as obstcl
+from . import geometric_primitives as gp
+from . import obstacles as obstcl
+
+import copy
 
 
 def get_custom_interface_methods(obj: object):
@@ -16,20 +18,48 @@ def check_obstacles(obstacles: list):
 class DistanceDetector:
     def __init__(self, obstacles: list):
         check_obstacles(obstacles)
-        self.obstacles = obstacles
+        self.obstacles = copy.deepcopy(obstacles)
+        self.safe_distance_from_obstacle = 0
 
-    def get_min_distance_vector(self, v: gp.Vector):
+    def set_safe_distance_from_obstacle(self, safe_distance_from_obstacle: float):
+        assert safe_distance_from_obstacle > -gp.EPS, f'safe_distance_from_obstacle has to be >= 0, (value {safe_distance_from_obstacle} is invalid)'
+        self.safe_distance_from_obstacle = safe_distance_from_obstacle
+        for obstacle in self.obstacles:
+            obstacle.radius += self.safe_distance_from_obstacle
+
+    def unset_safe_distance_from_obstacle(self):
+        for obstacle in self.obstacles:
+            obstacle.radius -= self.safe_distance_from_obstacle
+
+    def is_inside_obstacle(self, p: gp.Point):
+        for obstacle in self.obstacles:
+            if obstacle.is_inside(p):
+                return True
+        return False
+
+    def get_min_distance_vector(
+        self, v: gp.Vector,
+        is_rectangularized: bool = False,
+    ) -> tuple[gp.Vector, int]:
         """
         Returns minimal distance to obstacles from vector v.
         If vector v does not reach any obstacle, vector v is returned.
         """
 
         result = v
-        for obstacle in self.obstacles:
-            cur_v = obstacle.get_intersection_with_vector(result)
+        obstacle_index = None
+        for index, obstacle in enumerate(self.obstacles):
+            if result.norm() < gp.EPS:
+                return result, obstacle_index
+
+            cur_v = obstacle.get_intersection_with_vector(
+                result,
+                is_rectangularized=is_rectangularized,
+            )
             if cur_v is not None:
                 result = cur_v
-        return result
+                obstacle_index = index
+        return result, obstacle_index
 
 
 class FieldOfViewVectorSampler:

@@ -1,6 +1,6 @@
-import obstacle_avoidance.geometric_primitives as gp
-import obstacle_avoidance.obstacles as obstcl
-import obstacle_avoidance.field_of_view_analyzer as fva
+from .. import geometric_primitives as gp
+from .. import obstacles as obstcl
+from .. import field_of_view_analyzer as fva
 
 import math
 import pytest
@@ -66,7 +66,7 @@ def test_field_of_view_vector_sampler(fva_sampler, n, distribuiton, expected_res
                 ]
             ),
             gp.Vector(3, 2, gp.Point(0, 1)),
-            gp.Vector(0.22650000, 1.07550000, gp.Point(0, 1)),
+            (gp.Vector(0.22650000, 1.07550000, gp.Point(0, 1)), 2),
         ),
         (
             fva.DistanceDetector(
@@ -78,7 +78,7 @@ def test_field_of_view_vector_sampler(fva_sampler, n, distribuiton, expected_res
                 ]
             ),
             gp.Vector(3, 2, gp.Point(0, 1)),
-            gp.Vector(0.93030615, 1.31010205, gp.Point(0, 1)),
+            (gp.Vector(0.93030615, 1.31010205, gp.Point(0, 1)), 1),
         ),
         (
             fva.DistanceDetector(
@@ -89,7 +89,7 @@ def test_field_of_view_vector_sampler(fva_sampler, n, distribuiton, expected_res
                 ]
             ),
             gp.Vector(3, 2, gp.Point(0, 1)),
-            gp.Vector(1.10263340, 1.36754446, gp.Point(0, 1)),
+            (gp.Vector(1.10263340, 1.36754446, gp.Point(0, 1)), 1),
         ),
         (
             fva.DistanceDetector(
@@ -99,7 +99,7 @@ def test_field_of_view_vector_sampler(fva_sampler, n, distribuiton, expected_res
                 ]
             ),
             gp.Vector(3, 2, gp.Point(0, 1)),
-            gp.Vector(3, 2, gp.Point(0, 1)),
+            (gp.Vector(3, 2, gp.Point(0, 1)), 0),
         ),
         (
             fva.DistanceDetector(
@@ -108,7 +108,7 @@ def test_field_of_view_vector_sampler(fva_sampler, n, distribuiton, expected_res
                 ]
             ),
             gp.Vector(3, 2, gp.Point(0, 1)),
-            gp.Vector(3, 2, gp.Point(0, 1)),
+            (gp.Vector(3, 2, gp.Point(0, 1)), None),
         ),
         (
             fva.DistanceDetector(
@@ -117,7 +117,7 @@ def test_field_of_view_vector_sampler(fva_sampler, n, distribuiton, expected_res
                 ]
             ),
             gp.Vector(12, 5, gp.Point(0, 1)),
-            gp.Vector(8.13030615, 3.71010205, gp.Point(0, 1)),
+            (gp.Vector(8.13030615, 3.71010205, gp.Point(0, 1)), 0),
         ),
     ]
 )
