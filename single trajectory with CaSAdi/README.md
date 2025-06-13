@@ -32,3 +32,6 @@ ONE thing to mention: if one build a maths model then simulate on ones own. Ther
 
 
 7th JUNE: write one algorithm for the initials. looks good. see segment1curvature1initials.m
+
+
+13th JUNE: upload full3.pdf to describe what i have done now.
