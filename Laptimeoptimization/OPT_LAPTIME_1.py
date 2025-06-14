@@ -3,7 +3,7 @@ import casadi as ca
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
-
+import pandas as pd
 # 车辆模型
 def vehicle_dynamics(x, u, kappa):
     v    = x[0]
@@ -70,9 +70,8 @@ def vehicle_dynamics(x, u, kappa):
 # CSV采样并等间距重采样
 def generate_reference_path(csv_file, ds=0.5, max_points=None):
     data = np.loadtxt(csv_file, delimiter=',')
-    # if max_points is not None:
-    #     data = data[:max_points]
-    data = data[:100]
+    if max_points is not None:
+        data = data[:max_points]
     x_ref = data[:, 0]
     y_ref = data[:, 1]
     wr = data[:, 2]
@@ -239,6 +238,19 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
     plt.title("Trajectory")
     plt.grid(True)
     plt.legend()
+    s_list = s[:len(X_opt)]
+    df_data = {
+        's': s_list,
+        'v': X_opt[:, 0],
+        'beta': X_opt[:, 1],
+        'omega': X_opt[:, 2],
+        'n': X_opt[:, 3],
+        'xi': X_opt[:, 4],
+        'delta': np.concatenate((U_opt[:, 0],[0])),
+        'F_dr': np.concatenate((U_opt[:, 1],[0])),
+    }
+    df = pd.DataFrame(df_data)
+    df.to_csv("optimal_trajectory.csv", index=False)
     plt.tight_layout()
     plt.show()
 
