@@ -10,6 +10,32 @@ import numpy as np
 import casadi as ca
 
 def B_opt(car_param, ds, s0, H, kappa_ref, global_sub, x_start):
+    """optimizing problem B by casadi
+
+    This function uses casadi to solve problem B
+
+    Args:
+        car_param (dic[str, numpy array]): car parameters
+        ds (float): step size for arclength s
+        s0 (float): initial position projected on center line
+        H (float): look ahead horizon, normally a multiple of 3
+        kappa_ref (function): takes a position s on the center line then returns the curvature of the center line at s
+        global_sub (dic[str, numpy array]): subarray of the global solution for each states or control
+        x_start (dic[str, numpy array]): states at the starting position s0
+
+    Returns:
+        opti: an casadi optimizer instance
+        n: lateral distance from the center line
+        xi: heading error
+        beta: sideslip angle
+        psi_dot: yaw rate
+        v: speed
+        delta_f: front steering angle
+        F_dr: driving force
+
+    Raises:
+        
+    """
     ##==unpack car parameters==##
     m = car_param["m"]
     g = car_param["g"]
