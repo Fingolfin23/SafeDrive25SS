@@ -35,3 +35,6 @@ ONE thing to mention: if one build a maths model then simulate on ones own. Ther
 
 
 13th JUNE: upload full3.pdf to describe what i have done now.
+
+
+25th JUNE: keep tuning for best parameter. and plz DM me if i need to do braking too
