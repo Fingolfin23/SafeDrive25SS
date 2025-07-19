@@ -35,6 +35,14 @@ def P_i_opt(car_param, ds, s0, s_end, kappa_ref, global_sub, sol_pre_P, sj, fov,
         v: speed
         delta_f: front steering angle
         F_dr: driving force
+        n_im(list of casadi.casadi.MX): n_im[i] contains the state n for imaginary car i+1 
+        xi_im(list of casadi.casadi.MX): xi_im[i] contains the state xi for imaginary car i+1 
+        beta_im(list of casadi.casadi.MX): beta_im[i] contains the state beta for imaginary car i+1 
+        psi_dot_im(list of casadi.casadi.MX): psi_dot_im[i] contains the state psi_dot for imaginary car i+1 
+        v_im(list of casadi.casadi.MX): v_im[i] contains the state v for imaginary car i+1 
+        delta_f_im(list of casadi.casadi.MX): delta_f_im[i] contains the control delta_f for imaginary car i+1 
+        F_dr_im(list of casadi.casadi.MX): F_dr_im[i] contains the control F_dr for imaginary car i+1 
+        
 
     Raises:
         
