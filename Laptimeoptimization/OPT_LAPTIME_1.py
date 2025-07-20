@@ -27,6 +27,8 @@ def vehicle_dynamics(x, u, kappa):
     Cd = 0.3
     Af = 1
 
+
+# 轮胎模型
     def slip_angle(delta, beta, l, w, omega, is_front):
         dy = v * ca.sin(beta) + l * omega if is_front else v * ca.sin(beta) - l * omega
         dx_left = v * ca.cos(beta) - w / 2 * omega
@@ -41,6 +43,8 @@ def vehicle_dynamics(x, u, kappa):
     FY_fr = Fy(alpha_fr)
     FY_rl = Fy(alpha_rl)
     FY_rr = Fy(alpha_rr)
+
+
 
     SF = (1 - n * kappa) / (v * ca.cos(xi + beta) + epsilon)
     F_roll = mu_roll * m * g
@@ -70,8 +74,10 @@ def vehicle_dynamics(x, u, kappa):
 # CSV采样并等间距重采样
 def generate_reference_path(csv_file, ds=0.5, max_points=None):
     data = np.loadtxt(csv_file, delimiter=',')
-    if max_points is not None:
-        data = data[:max_points]
+    # if max_points is not None:
+    #     data = data[:max_points]
+    #  在这里设置采样路段
+    data = data[770:880]
     x_ref = data[:, 0]
     y_ref = data[:, 1]
     wr = data[:, 2]
@@ -112,12 +118,12 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
     N = len(s) - 1
 
     # ---- 优化参数 ----
-    lambda_ddelta = 10 # 10
-    lambda_dF = 0.01
-    lambda_dn = 10.0
-    lambda_dxi = 5  # 5
-    lambda_dv = 1.0
-    lambda_jerk = 3.0  # 1
+    lambda_ddelta = 10 /3 # 3.4
+    lambda_dF = 0.0001 /3 #  600120
+    lambda_dn = 1.0 /3 # 21
+    lambda_dxi = 5 /3 #  0.4
+    lambda_dv = 0.1/3 # 0.8
+    lambda_jerk = 1.0 /9 # 6.38
 
     m = 1500.0
     g = 9.81
@@ -129,7 +135,7 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
     a_y_max = mu * g
 
     nx, nu = 5, 2
-    x0_val = [10.0, 0.0, 0.0, 0.0, 0.0]
+    x0_val = [20.0, 0.0, 0.0, 0.0, 0.0]
 
     w, w0, lbw, ubw, g_list, lbg, ubg = [], [], [], [], [], [], []
     J = 0
@@ -142,6 +148,7 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
     delta_prev_prev = ca.MX(0)
     F_prev = ca.MX(0)
     Xk_prev = Xk
+    J_time = 0
     for k in range(N):
         Uk = ca.MX.sym(f"U_{k}", nu)
         w += [Uk]
@@ -152,7 +159,7 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
         kappa_k = float(kappa[k])
         Xk_next = ca.MX.sym(f"X_{k + 1}", nx)
         w += [Xk_next]
-        w0 += [10.0, 0.0, 0.0, 0.0, 0.0]
+        w0 += [20.0, 0.0, 0.0, 0.0, 0.0]
 
         # ==== 动态道路宽度约束 ====
         n_min_k = -wr[k]
@@ -167,14 +174,18 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
         ubg += [0.0] * nx
 
         J += ds * SF_k
-        if k > 0:
-            J += lambda_ddelta * (Uk[0] - delta_prev) ** 2
-            J += lambda_dF * (Uk[1] - F_prev) ** 2
-            J += lambda_dn * (Xk[3] - Xk_prev[3]) ** 2
-            J += lambda_dxi * (Xk[4] - Xk_prev[4]) ** 2
-            J += lambda_dv * (Xk[0] - Xk_prev[0]) ** 2
-        if k > 1:
-            J += lambda_jerk * (Uk[0] - 2 * delta_prev + delta_prev_prev) ** 2
+        J_time += ds * SF_k
+        # ====================================
+        # Regularization Term
+        # ====================================
+        # if k > 0:
+        #     J += lambda_ddelta * (Uk[0] - delta_prev) ** 2
+        #     # J += lambda_dF * (Uk[1] - F_prev) ** 2
+        #     J += lambda_dn * (Xk[3] - Xk_prev[3]) ** 2
+        #     J += lambda_dxi * (Xk[4] - Xk_prev[4]) ** 2
+        #     J += lambda_dv * (Xk[0] - Xk_prev[0]) ** 2
+        # if k > 1:
+        #     J += lambda_jerk * (Uk[0] - 2 * delta_prev + delta_prev_prev) ** 2
         delta_prev_prev = delta_prev
         delta_prev = Uk[0]
         F_prev = Uk[1]
@@ -193,8 +204,12 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
         Xk = Xk_next
 
     nlp = {"f": J, "x": ca.vertcat(*w), "g": ca.vertcat(*g_list)}
-    solver = ca.nlpsol("solver", "ipopt", nlp, {"ipopt.print_level": 5, "print_time": False,"ipopt.max_iter": 3000})
+    # 在这里设置求解器迭代次数
+    solver = ca.nlpsol("solver", "ipopt", nlp, {"ipopt.print_level": 5, "print_time": False,"ipopt.max_iter": 300})
     sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
+    # 在solve_min_time末尾（求解后）
+    J_time_func = ca.Function("J_time", [ca.vertcat(*w)], [J_time])
+    total_time = float(J_time_func(sol['x']))
 
     w_opt = sol['x'].full().flatten()
     X_opt, U_opt = [], []
@@ -221,7 +236,6 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
     plt.grid(True)
     plt.title("Velocity Profile")
     plt.legend()
-
     # 2. trajectory
     plt.subplot(1, 2, 2)
     x_left = x_ref - wr * np.sin(theta)
@@ -236,21 +250,25 @@ def solve_min_time(csv_file='Nuerburgring.csv', ds=2):
     plt.xlabel('x (m)')
     plt.ylabel('y (m)')
     plt.title("Trajectory")
+    plt.text(0.05, 0.95, f'Total Time: {total_time:.2f} s',
+             transform=plt.gca().transAxes,
+             fontsize=12, color='blue',
+             verticalalignment='top')
     plt.grid(True)
     plt.legend()
-    s_list = s[:len(X_opt)]
-    df_data = {
-        's': s_list,
-        'v': X_opt[:, 0],
-        'beta': X_opt[:, 1],
-        'omega': X_opt[:, 2],
-        'n': X_opt[:, 3],
-        'xi': X_opt[:, 4],
-        'delta': np.concatenate((U_opt[:, 0],[0])),
-        'F_dr': np.concatenate((U_opt[:, 1],[0])),
-    }
-    df = pd.DataFrame(df_data)
-    df.to_csv("optimal_trajectory.csv", index=False)
+    # s_list = s[:len(X_opt)]
+    # df_data = {
+    #     's': s_list,
+    #     'v': X_opt[:, 0],
+    #     'beta': X_opt[:, 1],
+    #     'omega': X_opt[:, 2],
+    #     'n': X_opt[:, 3],
+    #     'xi': X_opt[:, 4],
+    #     'delta': np.concatenate((U_opt[:, 0],[0])),
+    #     'F_dr': np.concatenate((U_opt[:, 1],[0])),
+    # }
+    # df = pd.DataFrame(df_data)
+    # df.to_csv("optimal_trajectory.csv", index=False)
     plt.tight_layout()
     plt.show()
 
