@@ -38,3 +38,6 @@ ONE thing to mention: if one build a maths model then simulate on ones own. Ther
 
 
 25th JUNE: keep tuning for best parameter. and plz DM me if i need to do braking too
+
+
+22nd July in last 4 weeks i am keeping on tuning and modify with better numerical results. now uploaded the final version for most of the visualization results, named as segment1curvature1initialswithmultiple.m

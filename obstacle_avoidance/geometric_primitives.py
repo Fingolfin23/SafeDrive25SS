@@ -93,6 +93,11 @@ class Vector:
         assert new_length > EPS, f'vector length must be more than zero ({new_length} > 0 violated)'
         return self * (new_length / self.norm())
 
+    def get_angle_between(self, other):
+        other_pos = other.get_position()
+        pos = self.get_position()
+        return math.atan2(other_pos.y, other_pos.x) - math.atan2(pos.y, pos.x)
+
     def __mul__(self, resize_coef: float):
         """
         Multipies length of the vector by the resize_coef.

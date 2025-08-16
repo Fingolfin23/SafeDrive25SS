@@ -51,13 +51,11 @@ class ObstacleAwareTrackBuilder:
         distance_detector,
         normal_vector,
         minimal_gap_width,
-        is_rectangularized,
     ):
         max_gap_vector = gp.Vector(0, 0)
         while True:
             cur_gap_vector, obstacle_index = distance_detector.get_min_distance_vector(
                 normal_vector,
-                is_rectangularized=is_rectangularized,
             )
             cur_gap_middle = cur_gap_vector * 0.5
             is_cur_gap_inside_obstacles = distance_detector.is_inside_obstacle(
@@ -86,7 +84,6 @@ class ObstacleAwareTrackBuilder:
         self,
         cur_step_vector,
         safe_distance_from_obstacle,
-        is_rectangularized=False,
     ):
         if safe_distance_from_obstacle < gp.EPS:
             return False
@@ -99,7 +96,6 @@ class ObstacleAwareTrackBuilder:
         cur_direction = cur_step_vector.shift_to_new_origin(p).update_length(safe_distance_from_obstacle)
         _, obstacle_index = self.distance_detector.get_min_distance_vector(
             cur_direction,
-            is_rectangularized=is_rectangularized,
         )
         return obstacle_index is not None
 
@@ -108,12 +104,10 @@ class ObstacleAwareTrackBuilder:
         cur_step_vector,
         frontal_safe_distance_from_obstacle,
         rear_safe_distance_from_obstacle,
-        is_rectangularized=False,
     ):
         is_frontal_point_too_close = self._is_point_too_close_to_obstacle(
             cur_step_vector,
             frontal_safe_distance_from_obstacle,
-            is_rectangularized=is_rectangularized,
         )
         cur_step_vector_2 = cur_step_vector * 2
         backward_cur_step_vector = gp.Vector(
@@ -124,7 +118,6 @@ class ObstacleAwareTrackBuilder:
         is_rear_point_too_close = self._is_point_too_close_to_obstacle(
             backward_cur_step_vector,
             rear_safe_distance_from_obstacle,
-            is_rectangularized=is_rectangularized,
         )
         return is_frontal_point_too_close or is_rear_point_too_close
 
@@ -134,7 +127,6 @@ class ObstacleAwareTrackBuilder:
         distance_to_path_bound: float,
         minimal_gap_width: float,
         extra_points_number: int = 0,
-        is_rectangularized: bool = False,
         safe_distance_from_obstacle: float = 0,
         frontal_safe_distance_from_obstacle: float = 0,
         rear_safe_distance_from_obstacle: float = 0,
@@ -179,7 +171,6 @@ class ObstacleAwareTrackBuilder:
                     cur_step_vector,
                     frontal_safe_distance_from_obstacle,
                     rear_safe_distance_from_obstacle,
-                    is_rectangularized=is_rectangularized
                 ):
                     continue
 
@@ -191,7 +182,6 @@ class ObstacleAwareTrackBuilder:
                     self.distance_detector,
                     normal_vector,
                     minimal_gap_width,
-                    is_rectangularized,
                 )
                 new_distance_to_path_bound = min(cur_distance_to_path_bound, new_distance_to_path_bound)
                 result.append(center_point)

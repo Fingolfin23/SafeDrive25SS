@@ -189,3 +189,53 @@ def test_vector_add(v1, v2, expected_result):
 )
 def test_vector_sub(v1, v2, expected_result):
     assert v1 - v2 == expected_result
+
+
+@pytest.mark.parametrize(
+    'v1, v2, expected_result',
+    [
+        (
+            gp.Vector(1, 0),
+            gp.Vector(0, 1),
+            math.pi / 2,
+        ),
+        (
+            gp.Vector(0, 1),
+            gp.Vector(1, 0),
+            -math.pi / 2,
+        ),
+        (
+            gp.Vector(1, -1),
+            gp.Vector(1, 1),
+            math.pi / 2,
+        ),
+        (   
+            gp.Vector(1, 1),
+            gp.Vector(1, -1),
+            -math.pi / 2,
+        ),
+
+        (
+            gp.Vector(2, 1, gp.Point(1, 1)),
+            gp.Vector(-2, 4, gp.Point(-2, 3)),
+            math.pi / 2,
+        ),
+        (
+            gp.Vector(-2, 4, gp.Point(-2, 3)),
+            gp.Vector(2, 1, gp.Point(1, 1)),
+            -math.pi / 2,
+        ),
+        (
+            gp.Vector(2, 0, gp.Point(1, 1)),
+            gp.Vector(-1, 4, gp.Point(-2, 3)),
+            math.pi / 2,
+        ),
+        (   
+            gp.Vector(2, 2, gp.Point(1, 1)),
+            gp.Vector(-1, 2, gp.Point(-2, 3)),
+            -math.pi / 2,
+        ),
+    ]
+)
+def test_vector_angle_between(v1, v2, expected_result):
+    assert math.fabs(v1.get_angle_between(v2) - expected_result) < gp.EPS

@@ -151,7 +151,6 @@ def adapt_central_path_from_dataset(
         safe_distance_from_obstacle=0.35,  # 0.25m
         frontal_safe_distance_from_obstacle=vehicle.length+vehicle.width,
         rear_safe_distance_from_obstacle=vehicle.length+vehicle.width,
-        is_rectangularized=False,
     )
     tmp = np.asarray([new_distance_to_path_bound] * new_central_path.shape[0])
     return Path(np.vstack([new_central_path.T, tmp, tmp]).T) 
