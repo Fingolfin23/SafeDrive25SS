@@ -364,7 +364,7 @@ def solve_min_time(
         kappa_k = float(kappa[k])
         Xk_next = ca.MX.sym(f"X_{k + 1}", nx)
         w += [Xk_next]
-        w0 += [10.0, 0.0, 0.0, 0.0, 0.0]
+        w0 += [20.0, 0.0, 0.0, 0.0, 0.0]
 
         # ==== 动态道路宽度约束 ====
         n_min_k = -new_ref_path.dist_to_right_bound[k]
@@ -405,7 +405,7 @@ def solve_min_time(
         Xk = Xk_next
 
     nlp = {"f": J, "x": ca.vertcat(*w), "g": ca.vertcat(*g_list)}
-    solver = ca.nlpsol("solver", "ipopt", nlp, {"ipopt.print_level": 5, "print_time": False,"ipopt.max_iter": 1000})
+    solver = ca.nlpsol("solver", "ipopt", nlp, {"ipopt.print_level": 5, "print_time": False,"ipopt.max_iter": 2000})
     sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
 
     w_opt = sol['x'].full().flatten()
