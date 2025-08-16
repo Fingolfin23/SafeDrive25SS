@@ -3,6 +3,7 @@ from . import obstacles as obstcl
 from . import path_reader
 
 import copy
+import collections
 import math
 
 
@@ -171,6 +172,7 @@ class GapParams:
         assert left_bound.origin == right_bound.origin, 'left_bound.origin and right_bound.origin have to be the same point'
         self.left_bound = left_bound
         self.right_bound = right_bound
+        self._buffer = collections.deque([self.right_bound, self.left_bound])
 
     def get_gap_width(self):
         a = self.left_bound.norm()
@@ -188,8 +190,34 @@ class GapParams:
             right_bound=self.right_bound.update_length(length),
         )
 
+    def flush_buffer(self):
+        return GapParams(
+            left_bound=self.left_bound,
+            right_bound=self.right_bound,
+        )
+
     def get_min_vector_length(self):
-        return  min(self.left_bound.norm(), self.right_bound.norm())
+        return min(self.left_bound.norm(), self.right_bound.norm())
+
+    def is_shrinkable(self):
+        return len(self._buffer) > 2
+
+    def append(self, v):
+        if v == self.left_bound:
+            return
+
+        self._buffer.append(v)
+        self.left_bound = self._buffer[-1]
+
+    def pop(self):
+        assert len(self._buffer) > 2, f'gap_params buffer has only {len(self._buffer)} items'
+        self._buffer.pop()
+        self.left_bound = self._buffer[-1]
+
+    def popleft(self):
+        assert len(self._buffer) > 2, f'gap_params buffer has only {len(self._buffer)} items'
+        self._buffer.popleft()
+        self.right_bound = self._buffer[0]
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
@@ -305,24 +333,59 @@ class FieldOfViewAnalyzer:
             if cur_gap is None:
                 return
 
-            cur_gap = cur_gap.shrink_extra_vector_length()
-            if cur_gap.get_gap_width() > minimal_gap_width + gp.EPS:
-                if best_gap is None:
-                    best_gap = cur_gap
-                    cur_gap = None
-                    return
+            if cur_gap.shrink_extra_vector_length().get_gap_width() + gp.EPS < minimal_gap_width:
+                cur_gap = None
+                return
 
-                best_dist = best_gap.get_min_vector_length()
-                cur_dist = cur_gap.get_min_vector_length()
-                if best_dist + gp.EPS < cur_dist:
-                    best_gap = cur_gap
-                    cur_gap = None
-                    return
+            left_idx, right_idx = None, None
+            max_len = 0
+            for i, x in enumerate(cur_gap._buffer):
+                if x.norm() > max_len:
+                    left_idx = i
+                    right_idx = i
+                    max_len = x.norm()
 
-                if math.fabs(best_dist - cur_dist) < gp.EPS and best_gap.get_gap_width() + gp.EPS < cur_gap.get_gap_width():
-                    best_gap = cur_gap
-                    cur_gap = None
-                    return
+            buf = cur_gap._buffer
+            last_gap = GapParams(buf[left_idx], buf[right_idx])
+            while 0 <= right_idx and left_idx < len(buf):
+                right_v = buf[right_idx - 1] if right_idx > 0 else gp.Vector(0, 0)
+                left_v = buf[left_idx + 1] if left_idx + 1 < len(buf) else gp.Vector(0, 0)
+                if last_gap.get_gap_width() < minimal_gap_width + gp.EPS:
+                    if right_v.norm() > left_v.norm():
+                        last_gap = GapParams(last_gap.left_bound, right_v)
+                        right_idx -= 1
+                    else:
+                        last_gap = GapParams(left_v, last_gap.right_bound)
+                        left_idx += 1
+                    continue
+
+                if max(right_v.norm(), left_v.norm()) + gp.EPS < last_gap.get_min_vector_length():
+                    break
+            
+                if right_v.norm() > left_v.norm():
+                    last_gap = GapParams(last_gap.left_bound, right_v)
+                    right_idx -= 1
+                else:
+                    last_gap = GapParams(left_v, last_gap.right_bound)
+                    left_idx += 1
+
+            cur_gap = last_gap.shrink_extra_vector_length()
+            if best_gap is None:
+                best_gap = cur_gap
+                cur_gap = None
+                return
+
+            best_dist = best_gap.get_min_vector_length()
+            cur_dist = cur_gap.get_min_vector_length()
+            if best_dist + gp.EPS < cur_dist:
+                best_gap = cur_gap
+                cur_gap = None
+                return
+
+            if math.fabs(best_dist - cur_dist) < gp.EPS and best_gap.get_gap_width() + gp.EPS < cur_gap.get_gap_width():
+                best_gap = cur_gap
+                cur_gap = None
+                return
 
             cur_gap = None
 
@@ -336,7 +399,7 @@ class FieldOfViewAnalyzer:
             w, _ = self.track_distance_detector.get_min_distance_vector(w)
             if cur_gap is None:
                 cur_gap = GapParams(left_bound=w, right_bound=w)
-            cur_gap.left_bound = w
+            cur_gap.append(w)
 
         _update_best_gap()
         return best_gap
@@ -371,72 +434,34 @@ class FieldOfViewAnalyzer:
         view_angle,
         minimal_gap_width,
     ):
-        right_vector = direction.rotate_by(-view_angle / 2.0).shift_to_new_origin(view_point)
+        # get view boundaries
+        right_vector = direction.rotate_by(-view_angle / 2.0).shift_to_new_origin(view_point).update_length(distance)
         right_vector_pos = right_vector.get_position()
         right_atan = math.atan2(right_vector_pos.y, right_vector_pos.x)
+        if right_atan < 0:
+            right_atan += math.pi * 2
 
-        left_vector = direction.rotate_by(view_angle / 2.0).shift_to_new_origin(view_point)
-        left_vector_pos = left_vector.get_position()
+        left_vector = direction.rotate_by(view_angle / 2.0).shift_to_new_origin(view_point).update_length(distance)
+        left_vector_pos = left_vector.get_position().rotate_by(-right_atan)
         left_atan = math.atan2(left_vector_pos.y, left_vector_pos.x)
-        vectors = [
-            x[0] for x in filter(
-                lambda a: right_atan <= math.atan2(a[0].get_position().y, a[0].get_position().x) and math.atan2(a[0].get_position().y, a[0].get_position().x) <= left_atan,
-                FieldOfViewTangentVectorsExtractor(
-                    self.obstacles
-                ).extract_tangtent_vectors_list(view_point, distance)
-            )
-        ]
-        vectors.extend([right_vector, left_vector])
-        vectors.sort(key=lambda x: math.atan2(x.get_position().y, x.get_position().x))
-        
-        # finding the gap
-        best_gap = None
-        cur_gap = None
+        while left_atan < right_atan:
+            left_atan += math.pi * 2
+        right_atan = right_atan % (math.pi * 2)
+        left_atan = left_atan % (math.pi * 2)
 
-        def _update_best_gap():
-            nonlocal cur_gap
-            nonlocal best_gap
+        # get tangent vectors
+        vectors_with_atan = []
+        for i, x in enumerate(
+            FieldOfViewTangentVectorsExtractor(
+                self.obstacles + self.track_obstacle.left_bound_segments + self.track_obstacle.right_bound_segments
+            ).extract_tangtent_vectors_list(view_point, distance)
+        ):
+            cur_vector = x[0].update_length(distance)
+            cur_vector_pos = cur_vector.get_position()
+            cur_vector_atan = (math.atan2(cur_vector_pos.y, cur_vector_pos.x) + math.pi * 2) % (math.pi * 2)
+            if right_atan <= cur_vector_atan and cur_vector_atan <= left_atan:
+                vectors_with_atan.append((cur_vector, cur_vector_atan, i % 2 == 1, x[1]))
 
-            if cur_gap is None:
-                return
-
-            cur_gap = cur_gap.shrink_extra_vector_length()
-            if cur_gap.get_gap_width() > minimal_gap_width + gp.EPS:
-                if best_gap is None:
-                    best_gap = cur_gap
-                    cur_gap = None
-                    return
-
-                best_dist = best_gap.get_min_vector_length()
-                cur_dist = cur_gap.get_min_vector_length()
-                if best_dist + gp.EPS < cur_dist:
-                    best_gap = cur_gap
-                    cur_gap = None
-                    return
-
-                if math.fabs(best_dist - cur_dist) < gp.EPS and best_gap.get_gap_width() + gp.EPS < cur_gap.get_gap_width():
-                    best_gap = cur_gap
-                    cur_gap = None
-                    return
-
-            cur_gap = None
-
-        for i in range(1, len(vectors)):
-            v_cur, v_prev = vectors[i], vectors[i - 1]
-            v_mid = v_prev.rotate_by(v_prev.get_angle_between(v_cur) / 2)
-
-            # print(v_mid)
-            w, _ = self.obstacles_distance_detector.get_min_distance_vector(v_mid)
-            if v_mid != w:
-                # direction meets an obstacle
-                _update_best_gap()
-                continue
-
-            v_cur, _ = self.track_distance_detector.get_min_distance_vector(v_cur)
-            if cur_gap is None:
-                v_prev, _ = self.track_distance_detector.get_min_distance_vector(v_prev)
-                cur_gap = GapParams(left_bound=v_cur, right_bound=v_prev)
-            cur_gap.left_bound = v_cur
-
-        _update_best_gap()
-        return best_gap
+        vectors_with_atan.sort(key=lambda x: x[1])
+        vectors = [right_vector] + list(map(lambda x: x[0], vectors_with_atan)) + [left_vector]
+        return self._detect_distance_common(vectors, minimal_gap_width)

@@ -107,7 +107,7 @@ class CircleObstacle(ObstacleInterface):
         v = gp.Vector(self.center.x, self.center.y, p)
         alpha = math.asin(self.radius / v.norm())
         v = v.update_length(length)
-        return v.rotate_by(alpha), v.rotate_by(-alpha)
+        return v.rotate_by(alpha + gp.EPS), v.rotate_by(-alpha - gp.EPS)
 
     def is_inside(self, p: gp.Point):
         """
@@ -184,10 +184,18 @@ class SegmentObstacle(ObstacleInterface):
         """
         assert length > gp.EPS, 'length has to be greater than zero'
         assert not self.is_inside(p), 'point has to be outside of segment'
-        return (
-            gp.Vector(self.p1.x, self.p1.y, p).update_length(length),
-            gp.Vector(self.p2.x, self.p2.y, p).update_length(length),
-        )
+
+        v_left = gp.Vector(self.p1.x, self.p1.y, p)
+        v_right = gp.Vector(self.p2.x, self.p2.y, p)
+        
+        v_left_pos = v_left.get_position()
+        v_right_pos = v_right.get_position()
+        v_left_atan = (math.atan2(v_left_pos.y, v_left_pos.x) + math.pi * 2) % (math.pi * 2)
+        v_right_atan = (math.atan2(v_right_pos.y, v_right_pos.x) + math.pi * 2) % (math.pi * 2)
+        if v_left_atan < v_right_atan:
+            v_left, v_right = v_right, v_left
+
+        return v_right.update_length(length).rotate_by(-gp.EPS), v_left.update_length(length).rotate_by(gp.EPS)
 
     def is_inside(self, p: gp.Point):
         """
