@@ -41,3 +41,7 @@ ONE thing to mention: if one build a maths model then simulate on ones own. Ther
 
 
 22nd July in last 4 weeks i am keeping on tuning and modify with better numerical results. now uploaded the final version for most of the visualization results, named as segment1curvature1initialswithmultiple.m
+
+
+
+19/08/2025: last night for case study, basically nothing new, but arranged all comments in code doc as english for readibility. see final 3 code documents. cubic3/cubic3_1/segmentation1curvature1initial1....(very long name this one).
