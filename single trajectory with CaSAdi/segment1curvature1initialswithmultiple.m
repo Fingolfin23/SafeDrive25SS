@@ -1,10 +1,7 @@
-% ====================================================
-% 多段分段 + 按曲率加密 + 调整初始猜测
-
 function segment1curvature1initialswithmultiple()
 import casadi.*
 
-%% === 0. 读取赛道数据 & 构造插值函数 ===
+%% === 0. Read Track Data & Construct Interpolation Functions ===
 data = readmatrix('Monza2.csv');
 x_data = data(:,1);
 y_data = data(:,2);
@@ -13,61 +10,61 @@ wl_data = data(:,4);
 x_data_orig     = x_data;
 y_data_orig     = y_data;
 
-% —— 原始弧长（累计欧氏距离）
+
+% -- Original arc length (cumulative Euclidean distance)
 s_raw  = [0; cumsum( hypot(diff(x_data), diff(y_data)) )];
 
-% —— 原始曲率计算（用切线角变化率）
+
+% -- Compute original curvature (using rate of change of tangent angle)
 dx_ds = gradient(x_data, s_raw);
 dy_ds = gradient(y_data, s_raw);
 theta = atan2(dy_ds, dx_ds);
 dtheta_ds = gradient(theta, s_raw);
-kappa_raw = abs(dtheta_ds);   % 绝对曲率
+kappa_raw = abs(dtheta_ds);   % absolute curvature
 
-% —— 密度权重（按曲率归一化）
-a = 1.8;    % 曲率加密系数，可自行调整
-kappa_norm = kappa_raw / max(kappa_raw + 1e-6);  % 防止除零
+
+% -- Density weight (normalized by curvature)
+a = 1.8;    % Curvature refinement factor (adjustable; higher -> denser points in curves)
+kappa_norm = kappa_raw / max(kappa_raw + 1e-6);  % prevent division by zero
 density_weight = 1 + a * kappa_norm;
 
-% —— 每段“加权后”长度
-ds_orig = diff(s_raw);   % 原始每段长度 (M-1)
+
+% -- Weighted length of each segment
+ds_orig = diff(s_raw);   % Original length of each segment (M-1)
 ds_weighted = ds_orig .* density_weight(1:end-1);
 s_dense = [0; cumsum(ds_weighted)];
 
-% —— 按目标步长重新生成 s_uniform
-% ds_target =1.0;    % 目标步长（可调节）
-% s_uniform = (0:ds_target : s_dense(end))';
-% if s_uniform(end) < s_dense(end)
-%     s_uniform = [s_uniform; s_dense(end)];
-% end
 
-%% === 1. 分段参数 & 总段数设定 ===
-numSegments = 6;     % 把跑道分成段
-N_sub       = 90;    % 每段内部离散步数（自行调整）;
+%% === 1. Segment Parameters & Total Number of Segments ===
+numSegments = 6;     % Divide the track into this many segments
+N_sub       = 90;    %  Discretization steps within each segment (adjust as needed)
+
 
 s_uniform = linspace(0, s_dense(end), N_sub*numSegments); 
-% —— inverse，得到 s_uniform 对应的原始 s_raw 坐标
+% -- Inverse mapping: get original s_raw corresponding to s_uniform
 s_interp = interp1(s_dense, s_raw, s_uniform, 'pchip');
 
-% —— 插值采样原始轨迹数据
+% -- Interpolate original trajectory data at new sample points
 x_data_new = interp1(s_raw, x_data, s_interp, 'pchip');
 y_data_new = interp1(s_raw, y_data, s_interp, 'pchip');
 wr_new     = interp1(s_raw, wr_data, s_interp, 'linear');
 wl_new     = interp1(s_raw, wl_data, s_interp, 'linear');
 
-% —— 新的索引序列
+
+% -- New index sequence
 s_data = (1:numel(x_data_new))';
-M          = numel(s_data);   % 记得更新 M，和之前一致
+M          = numel(s_data);   %  Update M to the new total number of points
 x_data     = x_data_new;
 y_data     = y_data_new;
 wr_data    = wr_new;
 wl_data    = wl_new;
 
-% 把赛道中心线和导数都用 CasADi 插值封装
 
+% Pack track centerline and derivatives into CasADi interpolants
 X_ref   = interpolant('X_ref',   'linear', {s_data}, x_data');
 Y_ref   = interpolant('Y_ref',   'linear', {s_data}, y_data');
 
-% % % 先算出离散导数，并做插值
+% Pre-compute discrete derivatives and create interpolants
 dX_data = gradient(x_data,s_data);
 dY_data = gradient(y_data,s_data) ;
 phi_data = atan2(dY_data, dX_data);
@@ -78,77 +75,78 @@ phi_ref = interpolant('phi_ref', 'linear', {s_data}, phi_data');
 wr_ref  = interpolant('wr_ref',  'linear', {s_data}, wr_data');
 wl_ref  = interpolant('wl_ref',  'linear', {s_data}, wl_data');
 
-%% === 1. 分段参数 & 总段数设定 ===
-% numSegments = 6;     % 把跑道分成段
-% N_sub       = 70;    % 每段内部离散步数（自行调整）;
-% 均匀把 [1, M] 分成 num段，得到每段的起点 s_start、终点 s_end（整数索引）
+
+%% === 1. Segment Parameters & Total Number of Segments (continued) ===
+% Evenly split [1, M] into numSegments segments to get each segment's start and end indices
 segBounds = round(linspace(1, M, numSegments+1));
-% 比如 segBounds = [1, 450, 900, 1350, M]
 
 
-% 假设分成 4 段
-segTime    = zeros(1, numSegments);      % 存每段用时
-segSstart  = zeros(1, numSegments);      % 存每段起始 s
-segSend    = zeros(1, numSegments);      % 存每段结束 s
-segXstart  = cell(1, numSegments);       % 存每段的起点状态（7×1）
-segXend    = cell(1, numSegments);       % 存每段的终点状态（7×1）S
-segXk_all  = cell(1, numSegments);       % 存每段完整的状态轨迹
-segUk_all  = cell(1, numSegments);       % 存每段完整的控制序列
+
+% Initialize storage for each segment
+segTime    = zeros(1, numSegments);      % Time taken in each segment
+segSstart  = zeros(1, numSegments);      % Starting s index of each segment
+segSend    = zeros(1, numSegments);      % Ending s index of each segment%
+segXstart  = cell(1, numSegments);       %% Starting state of each segment 
+segXend    = cell(1, numSegments);       %  % Ending state of each segment (7×1)
+segXk_all  = cell(1, numSegments);       % Full state trajectory for each segment% 
+segUk_all  = cell(1, numSegments);       %  Full control sequence for each segment
 
 
-% 全局拼接结果用的变量
-X_all = [];    % (7×总点数) 所有段拼在一起的状态
-U_all = [];    % (2×总步数) 所有段拼在一起的控制
-T_all = 0;     % 累计整个赛道走完所需的时间
+
+% Variables for concatenating full path results
+X_all = [];    % (7×total_points) All segment states concatenated% 
+U_all = [];    % (2×total_steps) All segment controls concatenated% 
+T_all = 0;     % Total time to complete the entire track% 
 
 exitStatus  = cell(numSegments,1);
-% 上一段的末点状态，用作“下一段”的初始状态
+ % Previous segment's final state (7×1), used as next segment's initial state
 X_end_prev = [];  % 7×1 向量
 % -----------------------------------------------------------------
-% 循环调用下面的嵌套函数 solveSegment
+% -----------------------------------------------------------------
+% Loop through each segment and solve using the nested function solveSegment
 for k = 1:numSegments
     %N_sub = N_sub_array(k);
     s_start = segBounds(k);
     s_end   = segBounds(k+1);
 
     if k == 1
-        X_start_val = [];  % 第一段没有上一段末状态，留空
+        X_start_val = [];  % First segment has no previous final state
     else
-        X_start_val = X_end_prev;  % 直接把上一段末状态当作本段初始
+        X_start_val = X_end_prev;  % Use previous segment's final state as this segment's initial
     end
 
-    % 调用嵌套子函数：解第 k 段
+    %  Solve segment k
      [Xk_opt, Uk_opt, Tk_opt, ret_stat, X_guess] = solveSegment(k, X_start_val, s_start, s_end, N_sub);
      segXguess_all{k} = X_guess;
 
-     fprintf('=== 段 %d 求解结束：T_segment = %.3f s， return_status = %s ===\n', ...
+     fprintf('===  Segment %d solved：T_segment = %.3f s， return_status = %s ===\n', ...
                  k, full(Tk_opt), ret_stat);
     
-    exitStatus{k} = ret_stat;  % 保存这一段的 IPOPT 退出状态
-     % —— 把本段关键数据“存”进去 —— 
-    segTime(k)   = full(Tk_opt);                  % 本段用时
-    segSstart(k) = s_start;                       % 本段起始 s
-    segSend(k)   = s_end;                         % 本段结束 s
-    segXstart{k} = Xk_opt(:,1);                   % 本段的起点状态（7×1）
-    segXend{k}   = Xk_opt(:,end);                 % 本段的终点状态（7×1）
-    segXk_all{k} = full(Xk_opt);                  % 本段整条解的状态
-    segUk_all{k} = full(Uk_opt);                  % 本段整条解的控制
+    exitStatus{k} = ret_stat;  % Store IPOPT return status for this segment
+     % Store key data for this segment
+    segTime(k)   = full(Tk_opt);                  % Time taken for this segment
+    segSstart(k) = s_start;                       % Segment starting s index
+    segSend(k)   = s_end;                         % Segment ending s index
+    segXstart{k} = Xk_opt(:,1);                   % Segment starting state (7×1)
+    segXend{k}   = Xk_opt(:,end);                 % Segment ending state (7×1)\
+    segXk_all{k} = full(Xk_opt);                  % Complete state trajectory for this segment
+    segUk_all{k} = full(Uk_opt);                  % Complete control sequence for this segment
     
     
     
     if k == 1
-        % 第一段，把所有 N_sub+1 个点一次性收进 X_all
+        % For the first segment, take all N_sub+1 points
         X_all = Xk_opt;          % (7 × (N_sub+1))
         U_all = Uk_opt;          % (2 × N_sub)
-        T_all = Tk_opt;          % 累计时间
+        T_all = Tk_opt;          %Total time so far
     else
-        % 下一段与上一段 “末点” 会重复一个时间点，所以要去掉 Xk_opt(:,1)
+        % For subsequent segments, avoid duplicating the connecting point
         X_all = [ X_all,           Xk_opt(:,2:end) ];  %#ok<AGROW>
         U_all = [ U_all,           Uk_opt          ];  %#ok<AGROW>
         T_all = T_all + Tk_opt;
     end
     
-    % 保存本段的“末状态” = Xk_opt(:,end)，给下一段用
+    % Save this segment's final state for use as next segment's initial state
     X_end_prev = Xk_opt(:, end);
     
     
@@ -158,7 +156,7 @@ end
 
 
 fprintf('==== Total accumulated time across all segments T_all = %.3f s ====\n', full(T_all) );
-% 【新增】—— 在主循环结束后，统一输出每段的 s_start → s_end 及 return_status
+% After solving all segments, output a summary of each segment's status
 fprintf('\n================ Summary of Exit Status per Segment ================\n');
 fprintf(' Segment |  s_start → s_end  |   return_status  \n');
 fprintf('------+-------------------+--------------------\n');
@@ -171,14 +169,14 @@ fprintf('\n====================== Segment Summary ======================\n');
 fprintf(' Segment |  s_start → s_end  |  Time [s]  |  Start Speed [km/h]  |  End Speed [km/h]\n');
 fprintf(' ----+-------------------+----------------+-------------------+---------------------\n');
 for k = 1:numSegments
-    v_start_k = segXstart{k}(5)*3.6;   % 把 m/s 换算成 km/h
+    v_start_k = segXstart{k}(5)*3.6;   % Convert m/s to km/h
     v_end_k   = segXend{k}(5)*3.6;
     fprintf(' %2d   |    %4d → %4d    |    %6.3f     |      %6.2f      |      %6.2f\n', ...
             k, segSstart(k), segSend(k), segTime(k), v_start_k, v_end_k );
 end
 fprintf(' ==================== summary end====================\n');
 
-%% 【1】确定有解的段
+%% [1] Determine Feasible Segments
 valid_segments = find( ...
     cellfun(@(s) ...
         strcmp(s, 'Solve_Succeeded') || ...
@@ -187,43 +185,42 @@ valid_segments = find( ...
         exitStatus) );
 num_valid = numel(valid_segments);
 
-    %% 【2】分段画图：带赛道边界
+    %% [2] Plot per Segment: with Track Boundaries
     figure('Name','Trajectory & Velocity with Corridor','NumberTitle','off');
-    margin = 4;  % 和你建模时一致
+    margin = 4;  % margin consistent with modeling (track half-width)
     
     for idx = 1:num_valid
         k = valid_segments(idx);
         Xk_here = segXk_all{k};   % 7×(N_sub+1)
         Uk_here = segUk_all{k};
     
-        % (1) 轨迹及边界
+        % Current segment index range
         subplot(2, num_valid, idx);
         hold on; grid on; axis equal;
-    
-        % 当前段索引范围
+
         s_range = segSstart(k):segSend(k);
     
-        % 中心线
+        % Centerline for this segment
         X_center = full(X_ref(s_range));
         Y_center = full(Y_ref(s_range));
     
-        % 边界法向矢量
+        % Boundary normal vectors
         dXu_seg = full(dXdu_f(s_range));
         dYu_seg = full(dYdu_f(s_range));
         Lp_seg  = sqrt(dXu_seg.^2 + dYu_seg.^2) + 1e-6;
         nX = -dYu_seg ./ Lp_seg;
         nY =  dXu_seg ./ Lp_seg;
-        % 左右边界
+        % Left and right boundaries
         XcorrL = X_center + nX*margin;
         YcorrL = Y_center + nY*margin;
         XcorrR = X_center - nX*margin;
         YcorrR = Y_center - nY*margin;
     
-        % 画轨迹
+        % Plot optimal trajectory for this segment
         plot( Xk_here(1,:), Xk_here(2,:), 'b-', 'LineWidth', 1.5 );
-        % 画中心线
+        % Plot centerline
         plot( X_center, Y_center, 'k--', 'LineWidth', 1.2 );
-        % 画边界
+        % Plot boundaries
         plot( XcorrL, YcorrL, 'k:', 'LineWidth', 1 );
         plot( XcorrR, YcorrR, 'k:', 'LineWidth', 1 );
     
@@ -232,7 +229,7 @@ num_valid = numel(valid_segments);
         legend('Optimal traj','Centerline','Corridor left','Corridor right');
     end
     
-    % (2) 速度图同上
+    % Plot velocity profiles for each feasible segment
     for idx = 1:num_valid
         k = valid_segments(idx);
         Xk_here = segXk_all{k};
@@ -245,16 +242,13 @@ num_valid = numel(valid_segments);
     end
     
     sgtitle('Trajectory & Velocity (with Corridor) for Each Feasible Segment');
-
-% === 可视化轨迹：原始轨迹 + 优化实际使用的点 ===
+% === Visualize Trajectory: Reference vs Optimized sample points ===
 figure('Name','Optimized Points in different segments', 'NumberTitle','off'); hold on; axis equal;
 title('Trajectory with Actual Optimization Points');
 xlabel('x [m]'); ylabel('y [m]');
-
-% 画原始轨迹
-plot(x_data, y_data, 'k--', 'LineWidth', 1.2);  % 原始轨迹
-
-% 每段的实际采样点
+% Plot reference trajectory (centerline)
+plot(x_data, y_data, 'k--', 'LineWidth', 1.2); 
+% Actual sample points in each segment
 colorList = {
     [0.8, 0.9, 1.0];  % very light blue
     [0.6, 0.8, 1.0];  % light blue
@@ -265,13 +259,13 @@ colorList = {
 };
 
 for j = 1:numSegments
-    Xk = segXk_all{j};  % 该段的状态序列 (7×N_sub)
+    Xk = segXk_all{j};  % State sequence of this segment (7×N_sub)
     plot(Xk(1,:), Xk(2,:), 'o', ...
         'Color', colorList{mod(j-1,length(colorList))+1}, ...
         'MarkerSize', 6, 'DisplayName', ['Segment ', num2str(j)]);
 end
 
-% 标记起点终点
+% Mark start and end points
 plot(segXk_all{1}(1,1), segXk_all{1}(2,1), 'bo', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Start');
 plot(segXk_all{end}(1,end), segXk_all{end}(2,end), 'bx', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'End');
 
@@ -282,8 +276,8 @@ for idx = 1:num_valid
     k = valid_segments(idx);
     subplot(1, num_valid, idx); hold on; axis equal; grid on;
 
-    X_guess_k = segXguess_all{k};  % 初始猜测轨迹（7×(N_sub+1)）
-    X_opt_k   = segXk_all{k};      % 优化结果轨迹
+    X_guess_k = segXguess_all{k};  % Initial guess trajectory (7×(N_sub+1))
+    X_opt_k   = segXk_all{k};      % Optimized trajectory
 
     plot(X_guess_k(1,:), X_guess_k(2,:), 'kx', 'DisplayName','Initial Guess');
     plot(X_opt_k(1,:),   X_opt_k(2,:),   'bo', 'DisplayName','Optimized');
@@ -300,15 +294,15 @@ hold on; axis equal; grid on;
 X_guess_all = [];
 
 for j = 1:numSegments
-    X_guess_j = segXguess_all{j};  % 获取初始猜测
+    X_guess_j = segXguess_all{j}; % Get initial guess for segment j
     if j == 1
         X_guess_all = X_guess_j;
     else
-        X_guess_all = [X_guess_all, X_guess_j(:,2:end)];  % 避免重复点
+        X_guess_all = [X_guess_all, X_guess_j(:,2:end)];  % Avoid duplicating overlapping points
     end
 end
 
-% 绘制图像
+% Plot the graph
 plot(X_guess_all(1,:), X_guess_all(2,:), 'kx', 'DisplayName','Initial Guess');
 plot(X_all(1,:), X_all(2,:), 'bo', 'DisplayName','Optimized');
 plot(x_data, y_data, 'k--', 'DisplayName','Centerline');
@@ -319,40 +313,35 @@ legend;
 
 
 figure('Name','Comparison of Equidistant and Non-equidistant Sampling', 'NumberTitle','off');
-% 对比点
-h1 = plot(x_data_orig, y_data_orig, 'k--'); hold on;  % 原始轨迹线
-h2 = scatter(x_data_orig, y_data_orig, 10, 'k', 'filled');  % 原始采样点
-h3 = scatter(x_data_new, y_data_new, 30, 'b');     % 非等距采样点
+% Comparison of sampling points
+h1 = plot(x_data_orig, y_data_orig, 'k--'); hold on;  % Original trajectory line (raw data)
+h2 = scatter(x_data_orig, y_data_orig, 10, 'k', 'filled');  % Original equidistant sample points
+h3 = scatter(x_data_new, y_data_new, 30, 'b');     %% Non-equidistant sample points
+axis equal;
 axis equal;
 title('Comparison of Equidistant and Non-equidistant Points');
 legend([h1, h2, h3], {'Reference Trajectory', 'Equidistant Points', 'Non-equidistant Points'});
 
-% === 构造密度函数（按曲率归一化）
-a1 = 100.0;   % 密度调节系数（可调，越大弯道点越密）
+
+% === Construct density function (normalized by curvature) 
+a1 = 100.0;   % Density adjustment factor (tunable; higher -> denser in curves)
 density1 = 1 + a1 * (kappa_raw / max(kappa_raw + 1e-8));
 
-% === 构造“密度弧长”（积分密度得到s曲线）
+density1 = 1 + a1 * (kappa_raw / max(kappa_raw + 1e-8));
+
+% === Construct "density arc length" (integrate density to get s curve)
 ds_orig1 = diff(s_raw);
 s_cum1 = [0; cumsum(density1(1:end-1) .* ds_orig1)];
 
-% === 在密度弧长上均匀采样，然后反推回原始弧长
+% === Uniformly sample in density arc length domain, then map back to original arc length
 s_cum_uniform1 = linspace(0, s_cum1(end), N_sub*numSegments);
 s_interp1 = interp1(s_cum1, s_raw, s_cum_uniform1, 'pchip');
 
-% === 用反推出的 s_interp 插值原始轨迹
+% === Use s_interp1 to interpolate original trajectory
 x_data_new1 = interp1(s_raw, x_data_orig, s_interp1, 'pchip');
 y_data_new1 = interp1(s_raw, y_data_orig, s_interp1, 'pchip');
-% 如果之前注释了这行，要取消注释或替换
-% figure('Name','Comparison of Equidistant and Non-equidistant Sampling:only for visualization', 'NumberTitle','off');
-% h1 = plot(x_data, y_data, 'k--'); hold on;  % 原始轨迹线
-% h2 = scatter(x_data_orig, y_data_orig, 5, 'k', 'filled');  % 原始采样点
-% h3 = scatter(x_data_new1, y_data_new1, 10, 'b');     % 非等距采样点
-% 
-% axis equal;
-% title('Comparison of Equidistant and Non-equidistant Sampling');
-% legend([h1, h2, h3], {'Reference Trajectory', 'Equidistant Points', 'Non-equidistant Points'});
 
-% === 主图（完整轨迹对比） ===
+% === Main Figure (Full trajectory comparison) ===
 figure('Name','Comparison of Equidistant and Non-equidistant Sampling:only for visualization', 'NumberTitle','off');
 ax_main = axes('Position', [0.35, 0.2, 0.3, 0.6]);  % 中间主图区域
 h1 = plot(x_data, y_data, 'k--'); hold on;
@@ -363,29 +352,30 @@ title('Comparison of Equidistant and Non-equidistant Sampling');
 legend([h1, h2, h3], {'Reference Trajectory', 'Equidistant Points', 'Non-equidistant Points'}, 'Location','southoutside', 'Orientation','horizontal');
 xlabel('X [m]'); ylabel('Y [m]');
 
-% === 放大图1 ===
-ax_zoom1 = axes('Position', [0.05, 0.2, 0.3, 0.6]);  % 左
+
+% === Zoomed View 1 (right) ===
+ax_zoom1 = axes('Position', [0.05, 0.2, 0.3, 0.6]); % Left zoomed subplot
 h1z1 = plot(x_data, y_data, 'k--'); hold on;
 h2z1 = scatter(x_data_orig, y_data_orig, 5, 'k', 'filled');
 h3z1 = scatter(x_data_new1, y_data_new1, 10, 'b');
 axis equal;
-axis([80, 180, 800, 1100]);  % 这里填写第一个放大区域的坐标
+axis([80, 180, 800, 1100]); % Coordinates for the first zoomed region
 title('Zoomed View 1');
 set(gca,'XTick',[],'YTick',[]);
 
-% === 放大图2 ===
-ax_zoom2 = axes('Position', [0.70, 0.2, 0.3, 0.6]);  % 右
+% === Zoomed View 2 (right) ===
+ax_zoom2 = axes('Position', [0.70, 0.2, 0.3, 0.6]);   % Right zoomed subplot
 h1z2 = plot(x_data, y_data, 'k--'); hold on;
 h2z2 = scatter(x_data_orig, y_data_orig, 5, 'k', 'filled');
 h3z2 = scatter(x_data_new1, y_data_new1, 10, 'b');
 axis equal;
-axis([300, 500, 420, 780]);  % 这里填写第二个放大区域的坐标
+axis([300, 500, 420, 780]);  % Coordinates for the second zoomed region
 title('Zoomed View 2');
 set(gca,'XTick',[],'YTick',[]);
 
 
-%% === 3. 最终可视化：把拼接好的 X_all, U_all 以及赛道一起画出来 ===
-% 3.1. 先画一个细致的赛道中心线与走廊边界
+%% === 3. Final Visualization: Plot combined X_all, U_all with Track ===
+% 3.1. Plot a fine centerline and corridor boundaries
 u_plot = linspace(1, M, 400);
 XbP    = full( X_ref(u_plot) );
 YbP    = full( Y_ref(u_plot) );
@@ -394,7 +384,7 @@ dYuP   = full( dYdu_f(u_plot) );
 LpP    = sqrt(dXuP.^2 + dYuP.^2)+1e-6;
 nX     = -dYuP ./ LpP;
 nY     =  dXuP ./ LpP;
-%margin = 4;
+% margin is already defined
 
 
 XcorrL = XbP + nX*margin;
@@ -402,7 +392,7 @@ YcorrL = YbP + nY*margin;
 XcorrR = XbP - nX*margin;
 YcorrR = YbP - nY*margin;
 
-% 3.2. 画图：一张子图显示“中心线+走廊+优化轨迹”，另一张画速度曲线
+% 3.2. Plot: one subplot for centerline + corridor + optimized path, another for speed profile
 figure('Name','Multi‐Segment Trajectory & Speed','NumberTitle','off');
 subplot(2,1,1);
 hold on; grid on; axis equal;
@@ -426,8 +416,9 @@ sgtitle('Whole Path Visualization');
 figure('Name','Overview with Local Zooms','NumberTitle','off');
 
 
-% === 主图（中间） ===
-ax_main = axes('Position',[0.25, 0.25, 0.5, 0.5]);  % 可调整主图大小位置
+% === Main Plot (center) ===
+ax_main = axes('Position',[0.25, 0.25, 0.5, 0.5]);  % Adjust main plot size/position if needed
+hold on; grid on; axis equal;
 hold on; grid on; axis equal;
 
 plot(XcorrL, YcorrL, 'k--');
@@ -439,16 +430,16 @@ xlabel('X [m]'); ylabel('Y [m]');
 title('Full Trajectory with Corridor');
 legend('Corridor Left','Corridor Right','Centerline','Optimized','Location','best');
 
-% === 子图（六段轨迹 + 速度图） ===
+% === Subplots (six segment trajectories + speed plots) ===
 num_valid = numel(valid_segments);
-%margin = 4;  % 保持与你的建模一致
+% margin remains as defined (4)
 
 for idx = 1:num_valid
     k = valid_segments(idx);
     Xk_here = segXk_all{k};
     s_range = segSstart(k):segSend(k);
     
-    % 提取参考路径和法向
+    % Extract reference path and normal for this segment
     X_center = full(X_ref(s_range));
     Y_center = full(Y_ref(s_range));
     dXu_seg  = full(dXdu_f(s_range));
@@ -461,7 +452,7 @@ for idx = 1:num_valid
     XcorrR = X_center - margin * nX;
     YcorrR = Y_center - margin * nY;
 
-    % === 轨迹子图（上方） ===
+    % === Trajectory subplot (top) ===
     ax_traj = axes('Position',[0.05 + 0.15*(idx-1), 0.80, 0.12, 0.12]);
     hold on; axis equal; grid on;
     plot(XcorrL, YcorrL, 'k:');
@@ -471,7 +462,7 @@ for idx = 1:num_valid
     title(sprintf('Segment %d', k));
     set(gca, 'XTick',[], 'YTick',[]);
     
-    % === 速度子图（下方） ===
+     % === Velocity subplot (bottom) ===
     ax_vel = axes('Position',[0.05 + 0.15*(idx-1), 0.05, 0.12, 0.12]);
     t_local = linspace(0, full(segTime(k)), size(Xk_here,2));
     plot(t_local, Xk_here(5,:)*3.6, 'b-', 'LineWidth',1.2);
@@ -480,8 +471,8 @@ for idx = 1:num_valid
 end
 
 figure('Name','Final Layout for PPT','Color','w');
-%% === 1. 主图区域（中间） ===
-% 全局轨迹图（上）
+%% === 1. Main Plot Area (Center) ===
+% Global trajectory plot (top)
 ax_traj = axes('Position',[0.4, 0.60, 0.20, 0.15]);
 hold on; axis equal; grid on;
 plot(XcorrL, YcorrL, 'k--');
@@ -492,7 +483,7 @@ xlabel('X [m]'); ylabel('Y [m]');
 title('Full Trajectory with Corridor');
 % legend('Corridor Left','Corridor Right','Centerline','Optimized','Location','southoutside','Orientation','horizontal');
 
-% 全局速度图（下）
+% Global speed plot (bottom)
 ax_speed = axes('Position',[0.4, 0.3, 0.20, 0.15]);
 tgrid = linspace(0, full(T_all), size(X_all,2));
 plot(tgrid, X_all(5,:)*3.6, 'b-', 'LineWidth',1.5);
@@ -500,7 +491,7 @@ xlabel('Time [s]'); ylabel('Speed [km/h]');
 title('Overall Speed Profile');
 grid on;
 
-%% === 2. 子图：左 3 段 ===
+%% === 2. Subplots: Left 3 Segments ===
 for i = 1:3
     k = valid_segments(i);
     Xk_here = segXk_all{k};
@@ -520,8 +511,7 @@ for i = 1:3
     title(sprintf('Segment %d', k));
     set(gca,'XTick',[],'YTick',[]);
 end
-
-%% === 3. 子图：右 3 段 ===
+%% === 3. Subplots: Right 3 Segments ===
 for i = 4:6
     k = valid_segments(i);
     Xk_here = segXk_all{k};
@@ -543,15 +533,15 @@ for i = 4:6
 end
 
 
-%% === 自动记录日志 ===
-% 设置日志路径（存在则追加，不存在则创建）
+%% === Automatic Logging ===
+% Set log file path (append if exists, create if not)
 logFilePath = 'trajectory_log.txt';
 fid = fopen(logFilePath, 'a');
 
-% 当前时间戳
+% Current timestamp
 t_now = datetime('now','Format','yyyy-MM-dd HH:mm:ss');
 
-% 写入日志内容
+% Write log content
 fprintf(fid, '=== Run Time: %s ===\n', string(t_now));
 fprintf(fid, 'margin = %.2f,  numSegments = %d,  N_sub = %d,  alpha = %.2f\n', ...
             margin, numSegments, N_sub, a);
@@ -564,37 +554,37 @@ end
 fprintf(fid, '============================\n\n');
 fclose(fid);
 
-%% ===== 嵌套函数：解第 k 段的子问题 =====
+%% ===== Nested Function: Solve subproblem for segment k =====
 function [Xk_opt, Uk_opt, Tk_opt, ret_stat,X_guess_out] = solveSegment(k, X_start_value, s_start, s_end, N_sub)
-% 说明：
-%   k：第几段（用来打印日志，没别的）
-%   X_start_value：上段末状态；如果是第一段，则为空 []
-%   s_start：本段开始的赛道整数索引
-%   s_end  ：本段结束的赛道整数索引
-%   N_sub  ：本段内部的离散步数
+% Explanation:
+%   k: which segment number (for logging purposes)
+%   X_start_value: previous segment's final state; empty [] if first segment
+%   s_start: starting track index for this segment
+%   s_end  : ending track index for this segment
+%   N_sub  : number of discretization steps within this segment
 %
 import casadi.*
 
-% —— 3.1. 本段自由终点时间变量 & 时间步长 dt_sub
+% -- 3.1. Free final time variable for this segment & time step dt_sub
 opti_sub = Opti();
 Tseg     = opti_sub.variable();  
 dt_sub   = Tseg / N_sub;
 opti_sub.subject_to( Tseg > 0 );
 
-% —— 3.2. 本段的决策变量：状态 Xk (7×(N_sub+1)), 控制 Uk (2×N_sub)
+% -- 3.2. Decision variables for this segment: state Xk (7×(N_sub+1)), control Uk (2×N_sub)
 Xk = opti_sub.variable(7, N_sub+1);
 Uk = opti_sub.variable(2, N_sub);
 
-% 把 Xk、Uk 拆行，方便写约束
+% Split Xk and Uk into components for easier constraint writing
 Xp_k   = Xk(1,:);   Yp_k  = Xk(2,:);   psi_k = Xk(3,:);
 beta_k = Xk(4,:);   v_k   = Xk(5,:);   r_k   = Xk(6,:);
 s_k    = Xk(7,:);
 
 delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
 
-% —— 3.3. “初始/末端”约束
+% -- 3.3. Initial/terminal constraints
     if isempty(X_start_value)
-        % 第一段：强制从 s = s_start 的赛道索引出发
+        % First segment: enforce starting from track index s_start
         opti_sub.subject_to( s_k(1) == s_start );
         opti_sub.subject_to( Xp_k(1) == X_ref(s_start) );
         opti_sub.subject_to( Yp_k(1) == Y_ref(s_start) );
@@ -603,28 +593,28 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
         opti_sub.subject_to( v_k(1)   >= 0 );
         % opti_sub.subject_to( r_k(1)   == 0 );
     else
-        % 非第一段：直接把上段末状态当作本段初始
+        % Non-first segment: directly use previous segment's final state as initial state
         opti_sub.subject_to( Xk(:,1) == X_start_value );
-        % （包含 s、X、Y、psi、beta、v、r 一并固定）
+         % (This fixes s, X, Y, psi, beta, v, r at the start of this segment)
     end
     
-    % 强制本段末端到达 s = s_end
+    % Enforce end of this segment to reach s = s_end on the track
     opti_sub.subject_to( s_k(N_sub+1) == s_end );
     opti_sub.subject_to( Xp_k(N_sub+1) == X_ref(s_end) );
     opti_sub.subject_to( Yp_k(N_sub+1) == Y_ref(s_end) );
-    % （末端的 psi、beta、v、r 不加硬约束，自由调整）
-    
-    % —— 3.4. 保证 s 单调 & 范围限制
+    % (No hard constraints on psi, beta, v, r at the end point; they are free to adjust)
+
+% -- 3.4. Ensure s is non-decreasing & within [s_start, s_end]
     for i = 1:N_sub
         opti_sub.subject_to( s_k(i+1) >= s_k(i) );
     end
     opti_sub.subject_to( s_k >= s_start );
     opti_sub.subject_to( s_k <= s_end );
     
-    % 限制速度 v ≥ 0
+    % Ensure speed v ≥ 0
     opti_sub.subject_to( v_k >= 0 );
     
-    % —— 3.5. 控制/状态上下界
+    % -- 3.5. Control/state bounds
     delta_max = pi/2;  beta_max  = pi/2;  psi_max = pi;
     Fdr_max   = 7100;  Fdr_min   = -21000;
     opti_sub.subject_to( delta_k <=  delta_max );
@@ -636,7 +626,7 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
     opti_sub.subject_to( Fdr_k   <=  Fdr_max );
     opti_sub.subject_to( Fdr_k   >=  Fdr_min );
     
-    % —— 3.6. 本段车辆动力学参数（同前面）
+% -- 3.6. Vehicle dynamics parameters for this segment (same as above)
     m   = 1500;  Jz = 2500;
     lf  = 1.2;   lr = 1.3;
     wf  = 1.5;   wr_ = 1.5;
@@ -646,7 +636,7 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
     C1 = 1.2; C2 = 2.0; C3 = 0.3;
     eps = 1e-6;
     
-    % —— 3.7. 定义本段动态函数 f_dyn_sub(x,u) → xdot
+    % -- 3.7. Define dynamic function f_dyn_sub(x,u) -> xdot for this segment
     x_sub = SX.sym('x',7);
     u_sub = SX.sym('u',2);
     
@@ -686,7 +676,8 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
     Fxf_fl = Fdr;  Fxf_fr = Fdr;
     Fxf_rl = Fdr;  Fxf_rr = Fdr;
     
-    % 前轮坐标系旋转到车辆坐标系
+   
+% Rotate front wheel forces to vehicle coordinate frame
     Fxf_fl_c = Fxf_fl*cos(delta) - Fyf_fl*sin(delta);
     Fyf_fl_c = Fxf_fl*sin(delta) + Fyf_fl*cos(delta);
     Fxf_fr_c = Fxf_fr*cos(delta) - Fyf_fr*sin(delta);
@@ -709,7 +700,7 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
                Fxf_fl_c*sin(delta)*lf + Fxf_fr_c*sin(delta)*lf );
     dV    = 1/m * ( (Fyf_fl_c+Fyf_fr_c)*sin(B-delta) + (Fyf_rl_c+Fyf_rr_c)*sin(B) + Fdr*cos(B) );
     
-    % ds/dt = V * cosr / Lp，其中 cosr = (cos(Psi+B)*dXu + sin(Psi+B)*dYu)/Lp
+    % ds/dt = V * cosr / Lp，where cosr = (cos(Psi+B)*dXu + sin(Psi+B)*dYu)/Lp
     dXu  = dXdu_f(s_par);   dYu  = dYdu_f(s_par);
     Lp   = sqrt(dXu.^2 + dYu.^2) + eps;
     cosr = cos(Psi+B)*(dXu/Lp) + sin(Psi+B)*(dYu/Lp);
@@ -718,7 +709,7 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
     xdot_sub = [dXpos; dYpos; dPsi; dB; dV; dR; ds];
     f_dyn_sub = Function('f_dyn_sub',{x_sub,u_sub},{xdot_sub});
 
-    % —— 3.8. 添加“Euler 离散”动力学约束
+% -- 3.8. Add Euler discretization dynamic constraints
     for i = 1:N_sub
         xki  = Xk(:,i);
         uki  = Uk(:,i);
@@ -726,7 +717,7 @@ delta_k = Uk(1,:);  Fdr_k = Uk(2,:);
         opti_sub.subject_to( Xk(:,i+1) == xki1 );
     end
 
-% —— 3.9. 本段 Hard‐Corridor 约束
+% -- 3.9. Hard corridor constraints for this segment
 margin = 4;
     for i = 1:(N_sub+1)
         xr_i  = X_ref(  s_k(i) );
@@ -741,8 +732,8 @@ margin = 4;
         opti_sub.subject_to( ek_i >= -margin );
     end
 
-% —— 3.10. 为本段状态和控制做“每个格点单独”的初始猜测
-% 构造 X_guess (7×(N_sub+1))：让每个网格点 i 都落到跑道中心线上
+% -- 3.10. Initial guess for each grid point (to help solver)
+% Construct X_guess (7×(N_sub+1)): place each grid point on the track centerline
 X_guess = zeros(7, N_sub+1);
 
 
@@ -753,7 +744,7 @@ X_guess = zeros(7, N_sub+1);
         psi_ref_i = full( phi_ref( s_guess_i ) );
 
     
-        % 计算曲率
+        % Calculate curvature at this point
         dXu_i = full( dXdu_f(s_guess_i) );
         dYu_i = full( dYdu_f(s_guess_i) );
         ddXu_i= (full( dXdu_f( min(s_guess_i+1,M) ) ) - full( dXdu_f( max(s_guess_i-1,1) ) )) / 2;
@@ -765,11 +756,11 @@ X_guess = zeros(7, N_sub+1);
             R_i = 1 / kappa_i;
         end
 
-        % 估算该点最大速度 & 合理初始速度
+        % Estimate max speed at this point & reasonable initial speed guess
         v_max_i = sqrt(mu * g * R_i);
         v_guess_i = min( v_max_i, 60/3.6 );
     
-        % 估算 beta, r
+        % Estimate beta and r for initial guess
         beta_guess_i = 0;
         if R_i < 1e4
             r_guess_i = v_guess_i / R_i;
@@ -789,23 +780,24 @@ X_guess = zeros(7, N_sub+1);
     opti_sub.set_initial( Xk, X_guess );
     segXguess_all{k} = X_guess;
 
-    % 构造 Uk_guess (2×N_sub)：先猜 delta=0, Fdr=0
+    % Construct Uk_guess (2×N_sub): initial guess delta = 0, Fdr = 0
     Uk_guess = zeros(2, N_sub);
     opti_sub.set_initial( Uk, Uk_guess );
 
 
-    % 给 Tseg 一个粗略猜测：假设平均速度 5 m/s
+    % Provide a rough initial guess for Tseg: assume average speed ~5 m/s
     T_guess = (s_end - s_start)/5;
     opti_sub.set_initial( Tseg, T_guess );
 
-    % —— 3.11. 本段目标函数 & 求解 IPOPT
+   % -- 3.11. Objective function for this segment & solve with IPOPT
     w1 = 0.5;  w2 = 0.5;
     Jsub = w1*Tseg + w2*dt_sub*( sum(delta_k.^2) + sum(Fdr_k.^2) );
     opti_sub.minimize(Jsub);
 
     opts = struct('print_time',0, 'ipopt',struct('tol',1e-1, 'max_iter',5e4,'acceptable_obj_change_tol', 1e1,'acceptable_tol', 1e-1));
     opti_sub.solver('ipopt', opts);
-    X_guess_out = X_guess;  % 把初始猜测也作为输出
+    X_guess_out = X_guess;  % Also return the initial guess for analysis
+
     
     try
         sol_sub = opti_sub.solve();
@@ -819,5 +811,6 @@ X_guess = zeros(7, N_sub+1);
     Uk_opt = sol_sub.value(Uk);
     Tk_opt = sol_sub.value(Tseg);
 end
-    % —— 嵌套函数结束 —— 
+    % End of nested function solveSegment
 end
+% End of main function
